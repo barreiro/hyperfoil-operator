@@ -1,0 +1,13 @@
+apiVersion: hyperfoil.io/v1alpha1
+kind: Hyperfoil
+metadata:
+  name: example-hyperfoil
+spec:
+  # Tag for quay.io/hyperfoil/hyperfoil image
+  version: latest
+  # Host for the route leading to Controller REST endpoint
+  route: hyperfoil.apps.mycloud.example.com
+  # Config map and its entry with Log4j2 configuration file
+  log: myConfigMap/log4j2-superverbose.xml
+  # Deploy timeout for agents, in milliseconds
+  agentDeployTimeout: 60000
