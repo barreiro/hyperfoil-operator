@@ -19,7 +19,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
-  name: hyperfoil-operator.v0.6.0
+  name: hyperfoil-operator.v0.5.0
   namespace: openshift-operators
 spec:
   apiservicedefinitions: {}
@@ -61,7 +61,7 @@ spec:
                       fieldPath: metadata.name
                 - name: OPERATOR_NAME
                   value: hyperfoil-operator
-                image: quay.io/hyperfoil/hyperfoil-operator:0.6-SNAPSHOT
+                image: quay.io/hyperfoil/hyperfoil-operator:0.5
                 imagePullPolicy: Always
                 name: hyperfoil-operator
                 resources: {}
@@ -137,4 +137,4 @@ spec:
   maturity: alpha
   provider:
     name: Red Hat, Inc.
-  version: 0.6.0
+  version: 0.5.0

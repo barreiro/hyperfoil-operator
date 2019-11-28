@@ -15,7 +15,7 @@ spec:
       serviceAccountName: hyperfoil-operator
       containers:
         - name: hyperfoil-operator
-          image: quay.io/hyperfoil/hyperfoil-operator:0.6-SNAPSHOT
+          image: quay.io/hyperfoil/hyperfoil-operator:0.5
           command:
           - hyperfoil-operator
           imagePullPolicy: Always
