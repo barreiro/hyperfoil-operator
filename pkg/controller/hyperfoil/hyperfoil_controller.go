@@ -126,42 +126,72 @@ func (r *ReconcileHyperfoil) Reconcile(request reconcile.Request) (reconcile.Res
 		// Error reading the object - requeue the request.
 		return reconcile.Result{}, err
 	}
+	if instance.Status.Status != "Ready" {
+		instance.Status.Status = "Ready"
+		instance.Status.Reason = "Reconciliation succeeded."
+		instance.Status.LastUpdate = metav1.Now()
+	}
 
-	nocompares := func(interface{}, interface{}, logr.Logger) bool {
+	nocompare := func(interface{}, interface{}, logr.Logger) bool {
+		return true
+	}
+	nocheck := func(interface{}) bool {
 		return true
 	}
 
 	controllerRole := controllerRole(instance)
-	if err := ensureSame(r, instance, logger, controllerRole, "Role", &rbacv1.Role{}, nocompares); err != nil {
+	if err := ensureSame(r, instance, logger, controllerRole, "Role",
+		&rbacv1.Role{}, nocompare, nocheck); err != nil {
 		return reconcile.Result{}, err
 	}
 
 	controllerServiceAccount := controllerServiceAccount(instance)
-	if err := ensureSame(r, instance, logger, controllerServiceAccount, "ServiceAccount", &corev1.ServiceAccount{}, nocompares); err != nil {
+	if err := ensureSame(r, instance, logger, controllerServiceAccount, "ServiceAccount",
+		&corev1.ServiceAccount{}, nocompare, nocheck); err != nil {
 		return reconcile.Result{}, err
 	}
 
 	controllerRoleBinding := controllerRoleBinding(instance)
-	if err := ensureSame(r, instance, logger, controllerRoleBinding, "RoleBinding", &rbacv1.RoleBinding{}, nocompares); err != nil {
+	if err := ensureSame(r, instance, logger, controllerRoleBinding, "RoleBinding",
+		&rbacv1.RoleBinding{}, nocompare, nocheck); err != nil {
 		return reconcile.Result{}, err
 	}
 
 	controllerPod := controllerPod(instance)
-	if err := ensureSame(r, instance, logger, controllerPod, "Pod", &corev1.Pod{}, compareControllerPod); err != nil {
+	if err := ensureSame(r, instance, logger, controllerPod, "Pod",
+		&corev1.Pod{}, compareControllerPod, checkControllerPod); err != nil {
 		return reconcile.Result{}, err
 	}
 
 	controllerService := controllerService(instance)
-	if err := ensureSame(r, instance, logger, controllerService, "Service", &corev1.Service{}, nocompares); err != nil {
+	if err := ensureSame(r, instance, logger, controllerService, "Service",
+		&corev1.Service{}, nocompare, nocheck); err != nil {
 		return reconcile.Result{}, err
 	}
 
 	controllerRoute := controllerRoute(instance)
-	if err := ensureSame(r, instance, logger, controllerRoute, "Route", &routev1.Route{}, compareControllerRoute); err != nil {
+	if err := ensureSame(r, instance, logger, controllerRoute, "Route",
+		&routev1.Route{}, compareControllerRoute, checkControllerRoute); err != nil {
 		return reconcile.Result{}, err
 	}
 
+	r.client.Status().Update(context.TODO(), instance)
+
 	return reconcile.Result{}, nil
+}
+
+func setStatus(r *ReconcileHyperfoil, instance *hyperfoilv1alpha1.Hyperfoil, status string, reason string) {
+	if instance.Status.Status == "Error" && status == "Pending" {
+		return
+	}
+	instance.Status.Status = status
+	instance.Status.Reason = reason
+	instance.Status.LastUpdate = metav1.Now()
+}
+
+func updateStatus(r *ReconcileHyperfoil, instance *hyperfoilv1alpha1.Hyperfoil, status string, reason string) {
+	setStatus(r, instance, status, reason)
+	r.client.Status().Update(context.TODO(), instance)
 }
 
 type resource interface {
@@ -169,7 +199,10 @@ type resource interface {
 	runtime.Object
 }
 
-func ensureSame(r *ReconcileHyperfoil, instance *hyperfoilv1alpha1.Hyperfoil, logger logr.Logger, object resource, resourceType string, out runtime.Object, compare func(interface{}, interface{}, logr.Logger) bool) error {
+func ensureSame(r *ReconcileHyperfoil, instance *hyperfoilv1alpha1.Hyperfoil, logger logr.Logger,
+	object resource, resourceType string, out runtime.Object,
+	compare func(interface{}, interface{}, logr.Logger) bool,
+	check func(interface{}) bool) error {
 	// Set Hyperfoil instance as the owner and controller
 	if err := controllerutil.SetControllerReference(instance, object, r.scheme); err != nil {
 		return err
@@ -181,22 +214,31 @@ func ensureSame(r *ReconcileHyperfoil, instance *hyperfoilv1alpha1.Hyperfoil, lo
 		logger.Info("Creating a new "+resourceType, resourceType+".Namespace", object.GetNamespace(), resourceType+".Name", object.GetName())
 		err = r.client.Create(context.TODO(), object)
 		if err != nil {
+			updateStatus(r, instance, "Error", "Cannot create "+resourceType+" "+object.GetName())
 			return err
 		}
+		setStatus(r, instance, "Pending", "Creating "+resourceType+" "+object.GetName())
 	} else if err != nil {
+		updateStatus(r, instance, "Error", "Cannot find "+resourceType+" "+object.GetName())
 		return err
 	} else if compare(object, out, logger) {
 		logger.Info(resourceType + " " + object.GetName() + " already exists and matches.")
+		if !check(out) {
+			setStatus(r, instance, "Error", resourceType+" "+object.GetName()+" is not ready.")
+		}
 	} else {
 		logger.Info(resourceType + " " + object.GetName() + " already exists but does not match. Deleting existing object.")
 		if err = r.client.Delete(context.TODO(), out); err != nil {
 			logger.Error(err, "Cannot delete "+resourceType+" "+object.GetName())
+			updateStatus(r, instance, "Error", "Cannot delete "+resourceType+" "+object.GetName())
 			return err
 		}
 		logger.Info("Creating a new " + resourceType)
 		if err = r.client.Create(context.TODO(), object); err != nil {
+			updateStatus(r, instance, "Error", "Cannot create "+resourceType+" "+object.GetName())
 			return err
 		}
+		setStatus(r, instance, "Pending", "Creating "+resourceType+" "+object.GetName())
 	}
 	return nil
 }
@@ -366,6 +408,19 @@ func compareControllerPod(i1 interface{}, i2 interface{}, logger logr.Logger) bo
 	return true
 }
 
+func checkControllerPod(i interface{}) bool {
+	pod, ok := i.(*corev1.Pod)
+	if !ok {
+		return false
+	}
+	for _, c := range pod.Status.Conditions {
+		if c.Type == corev1.PodReady && c.Status == corev1.ConditionTrue {
+			return true
+		}
+	}
+	return false
+}
+
 func findLogVolume(volumes []corev1.Volume) (corev1.Volume, bool) {
 	for _, v := range volumes {
 		if v.Name == "log" {
@@ -428,4 +483,19 @@ func compareControllerRoute(i1 interface{}, i2 interface{}, logger logr.Logger) 
 		return false
 	}
 	return true
+}
+
+func checkControllerRoute(i interface{}) bool {
+	route, ok := i.(*routev1.Route)
+	if !ok {
+		return false
+	}
+	for _, ri := range route.Status.Ingress {
+		for _, c := range ri.Conditions {
+			if c.Type == routev1.RouteAdmitted && c.Status == corev1.ConditionTrue {
+				return true
+			}
+		}
+	}
+	return false
 }

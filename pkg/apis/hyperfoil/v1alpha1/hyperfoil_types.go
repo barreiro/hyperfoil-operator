@@ -20,9 +20,11 @@ type HyperfoilSpec struct {
 // HyperfoilStatus defines the observed state of Hyperfoil
 // +k8s:openapi-gen=true
 type HyperfoilStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
 	// Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
+	Status     string      `json:"status,omitempty"`
+	LastUpdate metav1.Time `json:"lastUpdate,omitempty"`
+	Reason     string      `json:"reason,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -33,6 +35,7 @@ type HyperfoilStatus struct {
 // +kubebuilder:resource:path=hyperfoils,scope=Namespaced
 // +kubebuilder:printcolumn:name="Version",type=string,JSONPath=`.spec.version`
 // +kubebuilder:printcolumn:name="Route",type=string,JSONPath=`.spec.route`
+// +kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.status`
 type Hyperfoil struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
