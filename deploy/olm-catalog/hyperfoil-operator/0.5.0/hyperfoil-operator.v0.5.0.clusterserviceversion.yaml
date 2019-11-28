@@ -18,6 +18,7 @@ metadata:
           }
         }
       ]
+    description: Microservice-oriented distributed benchmark framework.
     capabilities: Basic Install
   name: hyperfoil-operator.v0.5.0
   namespace: openshift-operators
@@ -30,8 +31,62 @@ spec:
       version: v1alpha1
       displayName: Hyperfoil
       description: Configures Hyperfoil Controller and related resources.
-  description: Installs Hyperfoil Controller into your cluster.
-  displayName: Hyperfoil Operator
+      specDescriptors:
+      - path: version
+        description: Version
+        displayName: Version
+        x-descriptors:
+        - 'urn:alm:descriptor:com.tectonic.ui:text'
+      - path: image
+        description: Image
+        displayName: Image
+        x-descriptors:
+        - 'urn:alm:descriptor:com.tectonic.ui:text'
+      - path: route
+        description: Route
+        displayName: Route
+        x-descriptors:
+        - 'urn:alm:descriptor:com.tectonic.ui:text'
+      - path: log
+        description: Log
+        displayName: Log
+        x-descriptors:
+        - 'urn:alm:descriptor:io.kubernetes:ConfigMap'
+        - 'urn:alm:descriptor:com.tectonic.ui:text'
+      - path: agentDeployTimeout
+        description: Agent Deploy Timeout
+        displayName: Agent Deploy Timeout
+        x-descriptors:
+        - 'urn:alm:descriptor:com.tectonic.ui:number'
+      - path: triggerUrl
+        description: Trigger Url
+        displayName: Trigger Url
+        x-descriptors:
+        - 'urn:alm:descriptor:com.tectonic.ui:text'
+      statusDescriptors:
+      - path: status
+        description: Status
+        displayName: Status
+        x-descriptors:
+        - 'urn:alm:descriptor:text'
+      - path: reason
+        description: Reason
+        displayName: Reason
+        x-descriptors:
+        - 'urn:alm:descriptor:text'
+      - path: lastUpdate
+        description: Last Update
+        displayName: Last Update
+        x-descriptors:
+        - 'urn:alm:descriptor:text'
+  description: |-
+    Hyperfoil is a modern benchmark framework oriented promising accurate results
+    with more flexibility and distributed architecture.
+
+    See more on [hyperfoil.io](http://hyperfoil.io).
+
+    Hyperfoil is licensed under Apache License 2.0
+  displayName: Hyperfoil
   install:
     spec:
       deployments:
@@ -129,6 +184,11 @@ spec:
   - test
   - load
   - driver
+  links:
+  - name: Website
+    url: http://hyperfoil.io
+  - name: GitHub
+    url: http://github.com/Hyperfoil
   maintainers:
   - name: Radim Vansa
     email: rvansa@redhat.com
