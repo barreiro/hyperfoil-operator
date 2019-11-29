@@ -15,6 +15,8 @@ type HyperfoilSpec struct {
 	Log                string `json:"log,omitempty"` // Name of configMap/entry
 	AgentDeployTimeout int    `json:"agentDeployTimeout,omitempty"`
 	TriggerURL         string `json:"triggerUrl,omitempty"`
+	PreHooks           string `json:"preHooks,omitempty"`
+	PostHooks          string `json:"postHooks,omitempty"`
 }
 
 // HyperfoilStatus defines the observed state of Hyperfoil

@@ -135,8 +135,8 @@ func (r *ReconcileHyperfoil) Reconcile(request reconcile.Request) (reconcile.Res
 	nocompare := func(interface{}, interface{}, logr.Logger) bool {
 		return true
 	}
-	nocheck := func(interface{}) bool {
-		return true
+	nocheck := func(interface{}) (bool, string, string) {
+		return true, "", ""
 	}
 
 	controllerRole := controllerRole(instance)
@@ -202,7 +202,7 @@ type resource interface {
 func ensureSame(r *ReconcileHyperfoil, instance *hyperfoilv1alpha1.Hyperfoil, logger logr.Logger,
 	object resource, resourceType string, out runtime.Object,
 	compare func(interface{}, interface{}, logr.Logger) bool,
-	check func(interface{}) bool) error {
+	check func(interface{}) (bool, string, string)) error {
 	// Set Hyperfoil instance as the owner and controller
 	if err := controllerutil.SetControllerReference(instance, object, r.scheme); err != nil {
 		return err
@@ -223,8 +223,8 @@ func ensureSame(r *ReconcileHyperfoil, instance *hyperfoilv1alpha1.Hyperfoil, lo
 		return err
 	} else if compare(object, out, logger) {
 		logger.Info(resourceType + " " + object.GetName() + " already exists and matches.")
-		if !check(out) {
-			setStatus(r, instance, "Error", resourceType+" "+object.GetName()+" is not ready.")
+		if ok, status, reason := check(out); !ok {
+			setStatus(r, instance, status, resourceType+" "+object.GetName()+" "+reason)
 		}
 	} else {
 		logger.Info(resourceType + " " + object.GetName() + " already exists but does not match. Deleting existing object.")
@@ -322,9 +322,22 @@ func controllerPod(cr *hyperfoilv1alpha1.Hyperfoil) *corev1.Pod {
 		"-Dio.hyperfoil.deploy.timeout=" + strconv.Itoa(deployTimeout),
 		"-Dio.hyperfoil.deployer=k8s",
 		"-Dio.hyperfoil.controller.host=0.0.0.0",
+		"-Dio.hyperfoil.rootdir=/var/hyperfoil/",
 	}
-	volumes := []corev1.Volume{}
-	volumeMounts := []corev1.VolumeMount{}
+	volumes := []corev1.Volume{
+		corev1.Volume{
+			Name: "hyperfoil",
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+		},
+	}
+	volumeMounts := []corev1.VolumeMount{
+		corev1.VolumeMount{
+			Name:      "hyperfoil",
+			MountPath: "/var/hyperfoil",
+		},
+	}
 	if cr.Spec.Log != "" {
 		configMap := cr.Spec.Log
 		file := "log4j2.xml"
@@ -333,20 +346,26 @@ func controllerPod(cr *hyperfoilv1alpha1.Hyperfoil) *corev1.Pod {
 			configMap, file = parts[0], parts[1]
 		}
 		command = append(command, "-Dlog4j.configurationFile=file:///etc/log4j2/"+file)
-		volumes = append(volumes, corev1.Volume{
-			Name: "log",
-			VolumeSource: corev1.VolumeSource{
-				ConfigMap: &corev1.ConfigMapVolumeSource{
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: configMap,
-					},
-					Optional: &[]bool{false}[0],
-				},
-			},
-		})
+		volumes = addConfigMapVolume(volumes, "log", configMap, false, 0644)
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{
 			Name:      "log",
 			MountPath: "/etc/log4j2/",
+			ReadOnly:  true,
+		})
+	}
+	if cr.Spec.PreHooks != "" {
+		volumes = addConfigMapVolume(volumes, "prehooks", cr.Spec.PreHooks, false, 0755)
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      "prehooks",
+			MountPath: "/var/hyperfoil/hooks/pre",
+			ReadOnly:  true,
+		})
+	}
+	if cr.Spec.PostHooks != "" {
+		volumes = addConfigMapVolume(volumes, "posthooks", cr.Spec.PostHooks, false, 0755)
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      "posthooks",
+			MountPath: "/hyperfoil/hooks/post",
 			ReadOnly:  true,
 		})
 	}
@@ -374,6 +393,21 @@ func controllerPod(cr *hyperfoilv1alpha1.Hyperfoil) *corev1.Pod {
 	}
 }
 
+func addConfigMapVolume(volumes []corev1.Volume, name string, configMap string, optional bool, mode int32) []corev1.Volume {
+	return append(volumes, corev1.Volume{
+		Name: name,
+		VolumeSource: corev1.VolumeSource{
+			ConfigMap: &corev1.ConfigMapVolumeSource{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: configMap,
+				},
+				Optional:    &optional,
+				DefaultMode: &mode,
+			},
+		},
+	})
+}
+
 func compareControllerPod(i1 interface{}, i2 interface{}, logger logr.Logger) bool {
 	p1, ok1 := i1.(*corev1.Pod)
 	p2, ok2 := i2.(*corev1.Pod)
@@ -391,43 +425,61 @@ func compareControllerPod(i1 interface{}, i2 interface{}, logger logr.Logger) bo
 		logger.Info("Commands don't match: " + fmt.Sprintf("%v | %v", c1.Command, c2.Command))
 		return false
 	}
-	lv1, h1 := findLogVolume(p1.Spec.Volumes)
-	lv2, h2 := findLogVolume(p1.Spec.Volumes)
-	if h1 != h2 {
-		logger.Info("One of the pods has log volume, other does not")
+	if !compareVolume(p1.Spec.Volumes, p2.Spec.Volumes, "log", logger) ||
+		!compareVolume(p1.Spec.Volumes, p2.Spec.Volumes, "prehook", logger) ||
+		!compareVolume(p1.Spec.Volumes, p2.Spec.Volumes, "posthook", logger) {
 		return false
 	}
-	if h1 && h2 {
-		n1 := lv1.VolumeSource.ConfigMap.LocalObjectReference.Name
-		n2 := lv2.VolumeSource.ConfigMap.LocalObjectReference.Name
-		if n1 != n2 {
-			logger.Info("ConfigMaps don't match" + n1 + " | " + n2)
-			return false
-		}
-	}
+
 	return true
 }
 
-func checkControllerPod(i interface{}) bool {
+func checkControllerPod(i interface{}) (bool, string, string) {
 	pod, ok := i.(*corev1.Pod)
 	if !ok {
-		return false
+		return false, "Error", " is not a pod"
 	}
 	for _, c := range pod.Status.Conditions {
 		if c.Type == corev1.PodReady && c.Status == corev1.ConditionTrue {
-			return true
+			return true, "", ""
 		}
 	}
-	return false
+	for _, cs := range pod.Status.ContainerStatuses {
+		if cs.State.Waiting != nil {
+			reason := cs.State.Waiting.Reason
+			if reason == "ImagePullBackOff" || reason == "ErrImagePull" {
+				return false, "Error", " cannot pull container image"
+			}
+		}
+	}
+	return false, "Pending", " is not ready"
 }
 
-func findLogVolume(volumes []corev1.Volume) (corev1.Volume, bool) {
+func findVolume(volumes []corev1.Volume, name string) (corev1.Volume, bool) {
 	for _, v := range volumes {
-		if v.Name == "log" {
+		if v.Name == name {
 			return v, true
 		}
 	}
 	return corev1.Volume{}, false
+}
+
+func compareVolume(vs1 []corev1.Volume, vs2 []corev1.Volume, name string, logger logr.Logger) bool {
+	v1, h1 := findVolume(vs1, name)
+	v2, h2 := findVolume(vs2, name)
+	if h1 != h2 {
+		logger.Info("One of the pods has volume " + name + ", other does not")
+		return false
+	}
+	if h1 && h2 {
+		n1 := v1.VolumeSource.ConfigMap.LocalObjectReference.Name
+		n2 := v2.VolumeSource.ConfigMap.LocalObjectReference.Name
+		if n1 != n2 {
+			logger.Info("Names of ConfigMaps for volume " + name + " don't match: " + n1 + " | " + n2)
+			return false
+		}
+	}
+	return true
 }
 
 func controllerService(cr *hyperfoilv1alpha1.Hyperfoil) *corev1.Service {
@@ -479,23 +531,27 @@ func compareControllerRoute(i1 interface{}, i2 interface{}, logger logr.Logger) 
 		logger.Info("Cannot cast to Routes: " + fmt.Sprintf("%v | %v", i1, i2))
 		return false
 	}
-	if r1.Spec.Host != r2.Spec.Host {
+	if r1.Spec.Host != "" && r1.Spec.Host != r2.Spec.Host {
 		return false
 	}
 	return true
 }
 
-func checkControllerRoute(i interface{}) bool {
+func checkControllerRoute(i interface{}) (bool, string, string) {
 	route, ok := i.(*routev1.Route)
 	if !ok {
-		return false
+		return false, "Error", " is not a route"
 	}
 	for _, ri := range route.Status.Ingress {
 		for _, c := range ri.Conditions {
-			if c.Type == routev1.RouteAdmitted && c.Status == corev1.ConditionTrue {
-				return true
+			if c.Type == routev1.RouteAdmitted {
+				if c.Status == corev1.ConditionTrue {
+					return true, "", ""
+				} else {
+					return false, "Error", " was not admitted"
+				}
 			}
 		}
 	}
-	return false
+	return false, "Pending", " is in unknown state"
 }
