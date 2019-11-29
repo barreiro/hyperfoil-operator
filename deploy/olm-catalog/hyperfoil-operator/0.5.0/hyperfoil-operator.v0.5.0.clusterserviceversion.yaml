@@ -18,6 +18,9 @@ metadata:
           }
         }
       ]
+    categories: Developer Tools
+    repository: https://github.com/Hyperfoil/hyperfoil-operator
+    containerImage: quay.io/hyperfoil/hyperfoil-operator:0.5
     description: Microservice-oriented distributed benchmark framework.
     capabilities: Basic Install
   name: hyperfoil-operator.v0.5.0

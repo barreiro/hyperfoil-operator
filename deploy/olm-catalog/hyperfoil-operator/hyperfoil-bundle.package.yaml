@@ -2,4 +2,4 @@ channels:
 - currentCSV: hyperfoil-operator.v0.5.0
   name: alpha
 defaultChannel: alpha
-packageName: hyperfoil-operator
+packageName: hyperfoil-bundle
