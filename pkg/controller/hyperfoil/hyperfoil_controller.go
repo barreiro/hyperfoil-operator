@@ -298,13 +298,16 @@ func controllerPod(cr *hyperfoilv1alpha1.Hyperfoil) *corev1.Pod {
 		"app":  cr.Name,
 		"role": "controller",
 	}
+	imagePullPolicy := corev1.PullIfNotPresent
 	version := version.Version
 	if cr.Spec.Version != "" {
 		version = cr.Spec.Version
+		imagePullPolicy = corev1.PullAlways
 	}
 	image := "quay.io/hyperfoil/hyperfoil:" + version
 	if cr.Spec.Image != "" {
 		image := cr.Spec.Image
+		imagePullPolicy = corev1.PullAlways
 		if cr.Spec.Version != "" {
 			if strings.Contains(image, ":") {
 				image = strings.Split(image, ":")[0] + ":" + cr.Spec.Version
@@ -381,10 +384,11 @@ func controllerPod(cr *hyperfoilv1alpha1.Hyperfoil) *corev1.Pod {
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{
 				{
-					Name:         "controller",
-					Image:        image,
-					Command:      command,
-					VolumeMounts: volumeMounts,
+					Name:            "controller",
+					Image:           image,
+					Command:         command,
+					VolumeMounts:    volumeMounts,
+					ImagePullPolicy: imagePullPolicy,
 				},
 			},
 			Volumes:            volumes,
@@ -439,17 +443,19 @@ func checkControllerPod(i interface{}) (bool, string, string) {
 	if !ok {
 		return false, "Error", " is not a pod"
 	}
-	for _, c := range pod.Status.Conditions {
-		if c.Type == corev1.PodReady && c.Status == corev1.ConditionTrue {
-			return true, "", ""
-		}
-	}
 	for _, cs := range pod.Status.ContainerStatuses {
 		if cs.State.Waiting != nil {
 			reason := cs.State.Waiting.Reason
 			if reason == "ImagePullBackOff" || reason == "ErrImagePull" {
 				return false, "Error", " cannot pull container image"
 			}
+		} else if cs.State.Terminated != nil {
+			return false, "Pending", " has terminated container"
+		}
+	}
+	for _, c := range pod.Status.Conditions {
+		if c.Type == corev1.PodReady && c.Status == corev1.ConditionTrue {
+			return true, "", ""
 		}
 	}
 	return false, "Pending", " is not ready"
@@ -547,9 +553,8 @@ func checkControllerRoute(i interface{}) (bool, string, string) {
 			if c.Type == routev1.RouteAdmitted {
 				if c.Status == corev1.ConditionTrue {
 					return true, "", ""
-				} else {
-					return false, "Error", " was not admitted"
 				}
+				return false, "Error", " was not admitted"
 			}
 		}
 	}
