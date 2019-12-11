@@ -29,6 +29,7 @@ import (
 )
 
 var log = logf.Log.WithName("controller_hyperfoil")
+var routeHost = "load.me"
 
 /**
 * USER ACTION REQUIRED: This is a scaffold file intended for the user to modify with their own Controller
@@ -157,6 +158,19 @@ func (r *ReconcileHyperfoil) Reconcile(request reconcile.Request) (reconcile.Res
 		return reconcile.Result{}, err
 	}
 
+	controllerRoute := controllerRoute(instance)
+	if err := ensureSame(r, instance, logger, controllerRoute, "Route",
+		&routev1.Route{}, compareControllerRoute, checkControllerRoute); err != nil {
+		return reconcile.Result{}, err
+	}
+
+	// This is a hack to workaround not being able to guess the route name ahead
+	actualRoute := routev1.Route{}
+	err := r.client.Get(context.TODO(), types.NamespacedName{Name: instance.Name, Namespace: instance.Namespace}, &actualRoute)
+	if err == nil {
+		routeHost = actualRoute.Spec.Host
+	}
+
 	controllerPod := controllerPod(instance)
 	if err := ensureSame(r, instance, logger, controllerPod, "Pod",
 		&corev1.Pod{}, compareControllerPod, checkControllerPod); err != nil {
@@ -166,12 +180,6 @@ func (r *ReconcileHyperfoil) Reconcile(request reconcile.Request) (reconcile.Res
 	controllerService := controllerService(instance)
 	if err := ensureSame(r, instance, logger, controllerService, "Service",
 		&corev1.Service{}, nocompare, nocheck); err != nil {
-		return reconcile.Result{}, err
-	}
-
-	controllerRoute := controllerRoute(instance)
-	if err := ensureSame(r, instance, logger, controllerRoute, "Route",
-		&routev1.Route{}, compareControllerRoute, checkControllerRoute); err != nil {
 		return reconcile.Result{}, err
 	}
 
@@ -253,10 +261,10 @@ func controllerRole(cr *hyperfoilv1alpha1.Hyperfoil) *rbacv1.Role {
 			rbacv1.PolicyRule{
 				APIGroups: []string{""},
 				Verbs: []string{
-					"create", "delete", "watch",
+					"*",
 				},
 				Resources: []string{
-					"pods",
+					"pods", "pods/log", "pods/status", "pods/finalizer",
 				},
 			},
 		},
@@ -320,11 +328,19 @@ func controllerPod(cr *hyperfoilv1alpha1.Hyperfoil) *corev1.Pod {
 	if cr.Spec.AgentDeployTimeout != 0 {
 		deployTimeout = cr.Spec.AgentDeployTimeout
 	}
+	var externalURI string
+	if cr.Spec.Route != "" {
+		externalURI = "http://" + cr.Spec.Route
+	} else {
+		externalURI = "http://" + routeHost
+	}
 	command := []string{
 		"/deployment/bin/controller.sh",
 		"-Dio.hyperfoil.deploy.timeout=" + strconv.Itoa(deployTimeout),
 		"-Dio.hyperfoil.deployer=k8s",
+		"-Dio.hyperfoil.deployer.k8s.namespace=" + cr.Namespace,
 		"-Dio.hyperfoil.controller.host=0.0.0.0",
+		"-Dio.hyperfoil.controller.external.uri=" + externalURI,
 		"-Dio.hyperfoil.rootdir=/var/hyperfoil/",
 	}
 	volumes := []corev1.Volume{
@@ -513,6 +529,10 @@ func controllerService(cr *hyperfoilv1alpha1.Hyperfoil) *corev1.Service {
 }
 
 func controllerRoute(cr *hyperfoilv1alpha1.Hyperfoil) *routev1.Route {
+	subdomain := ""
+	if cr.Spec.Route == "" {
+		subdomain = cr.Name
+	}
 	return &routev1.Route{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cr.Name,
@@ -521,7 +541,7 @@ func controllerRoute(cr *hyperfoilv1alpha1.Hyperfoil) *routev1.Route {
 		Spec: routev1.RouteSpec{
 			Host: cr.Spec.Route,
 			// If the Host is not set (empty) we'll use CR's name
-			Subdomain: cr.Name,
+			Subdomain: subdomain,
 			To: routev1.RouteTargetReference{
 				Kind: "Service",
 				Name: cr.Name,
@@ -537,10 +557,11 @@ func compareControllerRoute(i1 interface{}, i2 interface{}, logger logr.Logger) 
 		logger.Info("Cannot cast to Routes: " + fmt.Sprintf("%v | %v", i1, i2))
 		return false
 	}
-	if r1.Spec.Host != "" && r1.Spec.Host != r2.Spec.Host {
-		return false
+	if r1.Spec.Host == "" {
+		return r1.Spec.Subdomain == r2.Spec.Subdomain
+	} else {
+		return r1.Spec.Host == r2.Spec.Host
 	}
-	return true
 }
 
 func checkControllerRoute(i interface{}) (bool, string, string) {
