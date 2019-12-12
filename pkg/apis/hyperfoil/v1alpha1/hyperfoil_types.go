@@ -9,14 +9,15 @@ import (
 type HyperfoilSpec struct {
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
 	// Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
-	Image              string `json:"image,omitempty"`
-	Version            string `json:"version,omitempty"`
-	Route              string `json:"route,omitempty"`
-	Log                string `json:"log,omitempty"` // Name of configMap/entry
-	AgentDeployTimeout int    `json:"agentDeployTimeout,omitempty"`
-	TriggerURL         string `json:"triggerUrl,omitempty"`
-	PreHooks           string `json:"preHooks,omitempty"`
-	PostHooks          string `json:"postHooks,omitempty"`
+	Image                 string `json:"image,omitempty"`
+	Version               string `json:"version,omitempty"`
+	Route                 string `json:"route,omitempty"`
+	Log                   string `json:"log,omitempty"` // Name of configMap/entry
+	AgentDeployTimeout    int    `json:"agentDeployTimeout,omitempty"`
+	TriggerURL            string `json:"triggerUrl,omitempty"`
+	PreHooks              string `json:"preHooks,omitempty"`
+	PostHooks             string `json:"postHooks,omitempty"`
+	PersistentVolumeClaim string `json:"persistentVolumeClaim,omitempty"`
 }
 
 // HyperfoilStatus defines the observed state of Hyperfoil

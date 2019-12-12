@@ -343,20 +343,31 @@ func controllerPod(cr *hyperfoilv1alpha1.Hyperfoil) *corev1.Pod {
 		"-Dio.hyperfoil.controller.external.uri=" + externalURI,
 		"-Dio.hyperfoil.rootdir=/var/hyperfoil/",
 	}
-	volumes := []corev1.Volume{
-		corev1.Volume{
-			Name: "hyperfoil",
-			VolumeSource: corev1.VolumeSource{
-				EmptyDir: &corev1.EmptyDirVolumeSource{},
-			},
-		},
-	}
+	volumes := []corev1.Volume{}
 	volumeMounts := []corev1.VolumeMount{
 		corev1.VolumeMount{
 			Name:      "hyperfoil",
 			MountPath: "/var/hyperfoil",
 		},
 	}
+	if cr.Spec.PersistentVolumeClaim != "" {
+		volumes = append(volumes, corev1.Volume{
+			Name: "hyperfoil",
+			VolumeSource: corev1.VolumeSource{
+				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+					ClaimName: cr.Spec.PersistentVolumeClaim,
+				},
+			},
+		})
+	} else {
+		volumes = append(volumes, corev1.Volume{
+			Name: "hyperfoil",
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+		})
+	}
+
 	if cr.Spec.Log != "" {
 		configMap := cr.Spec.Log
 		file := "log4j2.xml"
@@ -447,7 +458,8 @@ func compareControllerPod(i1 interface{}, i2 interface{}, logger logr.Logger) bo
 	}
 	if !compareVolume(p1.Spec.Volumes, p2.Spec.Volumes, "log", logger) ||
 		!compareVolume(p1.Spec.Volumes, p2.Spec.Volumes, "prehook", logger) ||
-		!compareVolume(p1.Spec.Volumes, p2.Spec.Volumes, "posthook", logger) {
+		!compareVolume(p1.Spec.Volumes, p2.Spec.Volumes, "posthook", logger) ||
+		!compareVolume(p1.Spec.Volumes, p2.Spec.Volumes, "hyperfoil", logger) {
 		return false
 	}
 
@@ -494,11 +506,28 @@ func compareVolume(vs1 []corev1.Volume, vs2 []corev1.Volume, name string, logger
 		return false
 	}
 	if h1 && h2 {
-		n1 := v1.VolumeSource.ConfigMap.LocalObjectReference.Name
-		n2 := v2.VolumeSource.ConfigMap.LocalObjectReference.Name
-		if n1 != n2 {
-			logger.Info("Names of ConfigMaps for volume " + name + " don't match: " + n1 + " | " + n2)
+		// Make sure all use the same type
+		if (v1.VolumeSource.ConfigMap == nil) != (v2.VolumeSource.ConfigMap == nil) {
 			return false
+		} else if (v1.VolumeSource.EmptyDir == nil) != (v2.VolumeSource.EmptyDir == nil) {
+			return false
+		} else if (v1.VolumeSource.PersistentVolumeClaim == nil) != (v2.VolumeSource.PersistentVolumeClaim == nil) {
+			return false
+		}
+		if v1.VolumeSource.ConfigMap != nil {
+			n1 := v1.VolumeSource.ConfigMap.LocalObjectReference.Name
+			n2 := v2.VolumeSource.ConfigMap.LocalObjectReference.Name
+			if n1 != n2 {
+				logger.Info("Names of ConfigMaps for volume " + name + " don't match: " + n1 + " | " + n2)
+				return false
+			}
+		} else if v1.VolumeSource.PersistentVolumeClaim != nil {
+			n1 := v1.VolumeSource.PersistentVolumeClaim.ClaimName
+			n2 := v1.VolumeSource.PersistentVolumeClaim.ClaimName
+			if n1 != n2 {
+				logger.Info("Names of PVCs for volume " + name + " don't match: " + n1 + " | " + n2)
+				return false
+			}
 		}
 	}
 	return true
