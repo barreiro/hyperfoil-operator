@@ -92,6 +92,11 @@ spec:
         displayName: Persistent volume claim
         x-descriptors:
         - 'urn:alm:descriptor:com.tectonic.ui:text'
+      - path: secretEnvVars
+        description: >
+          List of secrets in this namespace; each entry from those secrets will be mapped
+          as environment variable, using the key as variable name.
+        displayName: Environment variables imported from secrets
       statusDescriptors:
       - path: status
         description: Status

@@ -75,6 +75,13 @@ spec:
             persistentVolumeClaim:
               description: Name of the PVC hyperfoil should mount for its workdir.
               type: string
+            secretEnvVars:
+              description: >
+                List of secrets in this namespace; each entry from those secrets will be mapped
+                as environment variable, using the key as variable name.
+              type: array
+              items:
+                type: string
         status:
           description: status defines the observed state of Hyperfoil
           type: object

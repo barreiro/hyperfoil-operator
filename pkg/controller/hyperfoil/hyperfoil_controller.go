@@ -395,12 +395,22 @@ func controllerPod(cr *hyperfoilv1alpha1.Hyperfoil) *corev1.Pod {
 		volumes = addConfigMapVolume(volumes, "posthooks", cr.Spec.PostHooks, false, 0755)
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{
 			Name:      "posthooks",
-			MountPath: "/hyperfoil/hooks/post",
+			MountPath: "/var/hyperfoil/hooks/post",
 			ReadOnly:  true,
 		})
 	}
 	if cr.Spec.TriggerURL != "" {
 		command = append(command, "-Dio.hyperfoil.trigger.url="+cr.Spec.TriggerURL)
+	}
+	envVars := make([]corev1.EnvFromSource, 0)
+	for _, secret := range cr.Spec.SecretEnvVars {
+		envVars = append(envVars, corev1.EnvFromSource{
+			SecretRef: &corev1.SecretEnvSource{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: secret,
+				},
+			},
+		})
 	}
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -416,6 +426,7 @@ func controllerPod(cr *hyperfoilv1alpha1.Hyperfoil) *corev1.Pod {
 					Command:         command,
 					VolumeMounts:    volumeMounts,
 					ImagePullPolicy: imagePullPolicy,
+					EnvFrom:         envVars,
 				},
 			},
 			Volumes:            volumes,
@@ -455,6 +466,17 @@ func compareControllerPod(i1 interface{}, i2 interface{}, logger logr.Logger) bo
 	if !reflect.DeepEqual(c1.Command, c2.Command) {
 		logger.Info("Commands don't match: " + fmt.Sprintf("%v | %v", c1.Command, c2.Command))
 		return false
+	}
+	if len(c1.EnvFrom) != len(c2.EnvFrom) {
+		logger.Info("Env vars differ " + fmt.Sprintf("%v vs %v", len(c1.Env), len(c2.Env)))
+		return false
+	}
+	for i, ef1 := range c1.EnvFrom {
+		ef2 := c2.EnvFrom[i]
+		if ef1.SecretRef == nil || ef2.SecretRef == nil || ef1.SecretRef.LocalObjectReference.Name != ef2.SecretRef.LocalObjectReference.Name {
+			log.Info("Secrets for env vars don't match.")
+			return false
+		}
 	}
 	if !compareVolume(p1.Spec.Volumes, p2.Spec.Volumes, "log", logger) ||
 		!compareVolume(p1.Spec.Volumes, p2.Spec.Volumes, "prehook", logger) ||
