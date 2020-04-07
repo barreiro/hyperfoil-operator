@@ -479,8 +479,8 @@ func compareControllerPod(i1 interface{}, i2 interface{}, logger logr.Logger) bo
 		}
 	}
 	if !compareVolume(p1.Spec.Volumes, p2.Spec.Volumes, "log", logger) ||
-		!compareVolume(p1.Spec.Volumes, p2.Spec.Volumes, "prehook", logger) ||
-		!compareVolume(p1.Spec.Volumes, p2.Spec.Volumes, "posthook", logger) ||
+		!compareVolume(p1.Spec.Volumes, p2.Spec.Volumes, "prehooks", logger) ||
+		!compareVolume(p1.Spec.Volumes, p2.Spec.Volumes, "posthooks", logger) ||
 		!compareVolume(p1.Spec.Volumes, p2.Spec.Volumes, "hyperfoil", logger) {
 		return false
 	}
