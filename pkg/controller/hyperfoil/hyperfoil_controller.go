@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	hyperfoilv1alpha1 "github.com/Hyperfoil/hyperfoil-operator/pkg/apis/hyperfoil/v1alpha1"
-	version "github.com/Hyperfoil/hyperfoil-operator/version"
 	logr "github.com/go-logr/logr"
 	routev1 "github.com/openshift/api/route/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -307,7 +306,7 @@ func controllerPod(cr *hyperfoilv1alpha1.Hyperfoil) *corev1.Pod {
 		"role": "controller",
 	}
 	imagePullPolicy := corev1.PullIfNotPresent
-	version := version.Version
+	version := "latest"
 	if cr.Spec.Version != "" {
 		version = cr.Spec.Version
 		imagePullPolicy = corev1.PullAlways
