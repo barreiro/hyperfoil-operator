@@ -418,6 +418,7 @@ func controllerPod(cr *hyperfoilv1alpha1.Hyperfoil) *corev1.Pod {
 			Labels:    labels,
 		},
 		Spec: corev1.PodSpec{
+			TerminationGracePeriodSeconds: &[]int64{0}[0],
 			Containers: []corev1.Container{
 				{
 					Name:            "controller",
