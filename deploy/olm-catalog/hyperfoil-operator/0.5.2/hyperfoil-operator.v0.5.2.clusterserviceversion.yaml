@@ -97,6 +97,8 @@ spec:
           List of secrets in this namespace; each entry from those secrets will be mapped
           as environment variable, using the key as variable name.
         displayName: Environment variables imported from secrets
+        x-descriptors:
+        - 'urn:alm:descriptor:com.tectonic.ui:text'
       statusDescriptors:
       - path: status
         description: Status
