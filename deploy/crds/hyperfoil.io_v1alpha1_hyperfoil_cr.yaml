@@ -1,4 +1,4 @@
-apiVersion: hyperfoil.io/v1alpha1
+apiVersion: hyperfoil.io/v1alpha2
 kind: Hyperfoil
 metadata:
   name: example-hyperfoil

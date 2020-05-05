@@ -4,10 +4,11 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 
-	hyperfoilv1alpha1 "github.com/Hyperfoil/hyperfoil-operator/pkg/apis/hyperfoil/v1alpha1"
+	hyperfoilv1alpha2 "github.com/Hyperfoil/hyperfoil-operator/pkg/apis/hyperfoil/v1alpha2"
 	logr "github.com/go-logr/logr"
 	routev1 "github.com/openshift/api/route/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -63,7 +64,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	}
 
 	// Watch for changes to primary resource Hyperfoil
-	err = c.Watch(&source.Kind{Type: &hyperfoilv1alpha1.Hyperfoil{}}, &handler.EnqueueRequestForObject{})
+	err = c.Watch(&source.Kind{Type: &hyperfoilv1alpha2.Hyperfoil{}}, &handler.EnqueueRequestForObject{})
 	if err != nil {
 		return err
 	}
@@ -93,7 +94,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 func watchSecondary(c controller.Controller, typ runtime.Object) error {
 	return c.Watch(&source.Kind{Type: typ}, &handler.EnqueueRequestForOwner{
 		IsController: true,
-		OwnerType:    &hyperfoilv1alpha1.Hyperfoil{},
+		OwnerType:    &hyperfoilv1alpha2.Hyperfoil{},
 	})
 }
 
@@ -115,7 +116,7 @@ func (r *ReconcileHyperfoil) Reconcile(request reconcile.Request) (reconcile.Res
 	logger.Info("Reconciling Hyperfoil")
 
 	// Fetch the Hyperfoil instance
-	instance := &hyperfoilv1alpha1.Hyperfoil{}
+	instance := &hyperfoilv1alpha2.Hyperfoil{}
 	if err := r.client.Get(context.TODO(), request.NamespacedName, instance); err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
@@ -187,7 +188,7 @@ func (r *ReconcileHyperfoil) Reconcile(request reconcile.Request) (reconcile.Res
 	return reconcile.Result{}, nil
 }
 
-func setStatus(r *ReconcileHyperfoil, instance *hyperfoilv1alpha1.Hyperfoil, status string, reason string) {
+func setStatus(r *ReconcileHyperfoil, instance *hyperfoilv1alpha2.Hyperfoil, status string, reason string) {
 	if instance.Status.Status == "Error" && status == "Pending" {
 		return
 	}
@@ -196,7 +197,7 @@ func setStatus(r *ReconcileHyperfoil, instance *hyperfoilv1alpha1.Hyperfoil, sta
 	instance.Status.LastUpdate = metav1.Now()
 }
 
-func updateStatus(r *ReconcileHyperfoil, instance *hyperfoilv1alpha1.Hyperfoil, status string, reason string) {
+func updateStatus(r *ReconcileHyperfoil, instance *hyperfoilv1alpha2.Hyperfoil, status string, reason string) {
 	setStatus(r, instance, status, reason)
 	r.client.Status().Update(context.TODO(), instance)
 }
@@ -206,7 +207,7 @@ type resource interface {
 	runtime.Object
 }
 
-func ensureSame(r *ReconcileHyperfoil, instance *hyperfoilv1alpha1.Hyperfoil, logger logr.Logger,
+func ensureSame(r *ReconcileHyperfoil, instance *hyperfoilv1alpha2.Hyperfoil, logger logr.Logger,
 	object resource, resourceType string, out runtime.Object,
 	compare func(interface{}, interface{}, logr.Logger) bool,
 	check func(interface{}) (bool, string, string)) error {
@@ -250,7 +251,7 @@ func ensureSame(r *ReconcileHyperfoil, instance *hyperfoilv1alpha1.Hyperfoil, lo
 	return nil
 }
 
-func controllerRole(cr *hyperfoilv1alpha1.Hyperfoil) *rbacv1.Role {
+func controllerRole(cr *hyperfoilv1alpha2.Hyperfoil) *rbacv1.Role {
 	return &rbacv1.Role{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "controller",
@@ -270,7 +271,7 @@ func controllerRole(cr *hyperfoilv1alpha1.Hyperfoil) *rbacv1.Role {
 	}
 }
 
-func controllerServiceAccount(cr *hyperfoilv1alpha1.Hyperfoil) *corev1.ServiceAccount {
+func controllerServiceAccount(cr *hyperfoilv1alpha2.Hyperfoil) *corev1.ServiceAccount {
 	return &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "controller",
@@ -279,7 +280,7 @@ func controllerServiceAccount(cr *hyperfoilv1alpha1.Hyperfoil) *corev1.ServiceAc
 	}
 }
 
-func controllerRoleBinding(cr *hyperfoilv1alpha1.Hyperfoil) *rbacv1.RoleBinding {
+func controllerRoleBinding(cr *hyperfoilv1alpha2.Hyperfoil) *rbacv1.RoleBinding {
 	return &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "controller",
@@ -300,7 +301,7 @@ func controllerRoleBinding(cr *hyperfoilv1alpha1.Hyperfoil) *rbacv1.RoleBinding 
 	}
 }
 
-func controllerPod(cr *hyperfoilv1alpha1.Hyperfoil) *corev1.Pod {
+func controllerPod(cr *hyperfoilv1alpha2.Hyperfoil) *corev1.Pod {
 	labels := map[string]string{
 		"app":  cr.Name,
 		"role": "controller",
@@ -382,16 +383,16 @@ func controllerPod(cr *hyperfoilv1alpha1.Hyperfoil) *corev1.Pod {
 			ReadOnly:  true,
 		})
 	}
-	if cr.Spec.PreHooks != "" {
-		volumes = addConfigMapVolume(volumes, "prehooks", cr.Spec.PreHooks, false, 0755)
+	if len(cr.Spec.PreHooks) > 0 {
+		volumes = addProjectedConfigMapsVolume(volumes, "prehooks", cr.Spec.PreHooks, 0755)
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{
 			Name:      "prehooks",
 			MountPath: "/var/hyperfoil/hooks/pre",
 			ReadOnly:  true,
 		})
 	}
-	if cr.Spec.PostHooks != "" {
-		volumes = addConfigMapVolume(volumes, "posthooks", cr.Spec.PostHooks, false, 0755)
+	if len(cr.Spec.PostHooks) > 0 {
+		volumes = addProjectedConfigMapsVolume(volumes, "posthooks", cr.Spec.PostHooks, 0755)
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{
 			Name:      "posthooks",
 			MountPath: "/var/hyperfoil/hooks/post",
@@ -445,6 +446,38 @@ func addConfigMapVolume(volumes []corev1.Volume, name string, configMap string, 
 				},
 				Optional:    &optional,
 				DefaultMode: &mode,
+			},
+		},
+	})
+}
+
+func addProjectedConfigMapsVolume(volumes []corev1.Volume, name string, configMaps []string, mode int32) []corev1.Volume {
+	sources := make([]corev1.VolumeProjection, 0)
+	for _, configMap := range configMaps {
+		var items []corev1.KeyToPath = nil
+		if strings.Contains(configMap, "/") {
+			parts := strings.SplitN(configMap, "/", 2)
+			items = make([]corev1.KeyToPath, 1)
+			configMap, items[0] = parts[0], corev1.KeyToPath{
+				Key:  parts[1],
+				Path: parts[1],
+			}
+		}
+		sources = append(sources, corev1.VolumeProjection{
+			ConfigMap: &corev1.ConfigMapProjection{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: configMap,
+				},
+				Items: items,
+			},
+		})
+	}
+	return append(volumes, corev1.Volume{
+		Name: name,
+		VolumeSource: corev1.VolumeSource{
+			Projected: &corev1.ProjectedVolumeSource{
+				DefaultMode: &mode,
+				Sources:     sources,
 			},
 		},
 	})
@@ -527,27 +560,46 @@ func compareVolume(vs1 []corev1.Volume, vs2 []corev1.Volume, name string, logger
 		logger.Info("One of the pods has volume " + name + ", other does not")
 		return false
 	}
-	if h1 && h2 {
-		// Make sure all use the same type
-		if (v1.VolumeSource.ConfigMap == nil) != (v2.VolumeSource.ConfigMap == nil) {
-			return false
-		} else if (v1.VolumeSource.EmptyDir == nil) != (v2.VolumeSource.EmptyDir == nil) {
-			return false
-		} else if (v1.VolumeSource.PersistentVolumeClaim == nil) != (v2.VolumeSource.PersistentVolumeClaim == nil) {
+	if !h1 && !h2 {
+		return true
+	}
+	// Make sure all use the same type
+	if (v1.VolumeSource.ConfigMap == nil) != (v2.VolumeSource.ConfigMap == nil) {
+		return false
+	} else if (v1.VolumeSource.EmptyDir == nil) != (v2.VolumeSource.EmptyDir == nil) {
+		return false
+	} else if (v1.VolumeSource.PersistentVolumeClaim == nil) != (v2.VolumeSource.PersistentVolumeClaim == nil) {
+		return false
+	} else if (v1.VolumeSource.Projected == nil) != (v2.VolumeSource.Projected == nil) {
+		return false
+	}
+	if v1.VolumeSource.ConfigMap != nil {
+		n1 := v1.VolumeSource.ConfigMap.LocalObjectReference.Name
+		n2 := v2.VolumeSource.ConfigMap.LocalObjectReference.Name
+		if n1 != n2 {
+			logger.Info("Names of ConfigMaps for volume " + name + " don't match: " + n1 + " | " + n2)
 			return false
 		}
-		if v1.VolumeSource.ConfigMap != nil {
-			n1 := v1.VolumeSource.ConfigMap.LocalObjectReference.Name
-			n2 := v2.VolumeSource.ConfigMap.LocalObjectReference.Name
-			if n1 != n2 {
-				logger.Info("Names of ConfigMaps for volume " + name + " don't match: " + n1 + " | " + n2)
-				return false
-			}
-		} else if v1.VolumeSource.PersistentVolumeClaim != nil {
-			n1 := v1.VolumeSource.PersistentVolumeClaim.ClaimName
-			n2 := v1.VolumeSource.PersistentVolumeClaim.ClaimName
-			if n1 != n2 {
-				logger.Info("Names of PVCs for volume " + name + " don't match: " + n1 + " | " + n2)
+	} else if v1.VolumeSource.PersistentVolumeClaim != nil {
+		n1 := v1.VolumeSource.PersistentVolumeClaim.ClaimName
+		n2 := v1.VolumeSource.PersistentVolumeClaim.ClaimName
+		if n1 != n2 {
+			logger.Info("Names of PVCs for volume " + name + " don't match: " + n1 + " | " + n2)
+			return false
+		}
+	} else if v1.VolumeSource.Projected != nil {
+		p1 := v1.VolumeSource.Projected
+		p2 := v2.VolumeSource.Projected
+		if len(p1.Sources) != len(p2.Sources) {
+			logger.Info("Different number of projected sources for volume " + name)
+			return false
+		}
+		for _, s1 := range p1.Sources {
+			items1 := findItems(p1.Sources, s1.ConfigMap.Name)
+			items2 := findItems(p2.Sources, s1.ConfigMap.Name)
+
+			if !reflect.DeepEqual(items1, items2) {
+				logger.Info("List of keys for volume " + name + " and config map " + s1.ConfigMap.Name + " does not match.")
 				return false
 			}
 		}
@@ -555,7 +607,22 @@ func compareVolume(vs1 []corev1.Volume, vs2 []corev1.Volume, name string, logger
 	return true
 }
 
-func controllerService(cr *hyperfoilv1alpha1.Hyperfoil) *corev1.Service {
+func findItems(sources []corev1.VolumeProjection, name string) []string {
+	keys := make([]string, 0)
+	for _, s := range sources {
+		if s.ConfigMap.Name == name {
+			if s.ConfigMap.Items == nil {
+				keys = append(keys, "___all___")
+			} else {
+				keys = append(keys, s.ConfigMap.Items[0].Key)
+			}
+		}
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func controllerService(cr *hyperfoilv1alpha2.Hyperfoil) *corev1.Service {
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cr.Name,
@@ -579,7 +646,7 @@ func controllerService(cr *hyperfoilv1alpha1.Hyperfoil) *corev1.Service {
 	}
 }
 
-func controllerRoute(cr *hyperfoilv1alpha1.Hyperfoil) *routev1.Route {
+func controllerRoute(cr *hyperfoilv1alpha2.Hyperfoil) *routev1.Route {
 	subdomain := ""
 	if cr.Spec.Route == "" {
 		subdomain = cr.Name

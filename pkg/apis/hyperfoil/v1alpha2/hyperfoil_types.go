@@ -1,4 +1,4 @@
-package v1alpha1
+package v1alpha2
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -15,8 +15,8 @@ type HyperfoilSpec struct {
 	Log                   string   `json:"log,omitempty"` // Name of configMap/entry
 	AgentDeployTimeout    int      `json:"agentDeployTimeout,omitempty"`
 	TriggerURL            string   `json:"triggerUrl,omitempty"`
-	PreHooks              string   `json:"preHooks,omitempty"`
-	PostHooks             string   `json:"postHooks,omitempty"`
+	PreHooks              []string `json:"preHooks,omitempty"`
+	PostHooks             []string `json:"postHooks,omitempty"`
 	PersistentVolumeClaim string   `json:"persistentVolumeClaim,omitempty"`
 	SecretEnvVars         []string `json:"secretEnvVars,omitempty"`
 }
