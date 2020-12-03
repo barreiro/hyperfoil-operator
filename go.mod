@@ -3,6 +3,7 @@ module github.com/Hyperfoil/hyperfoil-operator
 go 1.13
 
 require (
+	github.com/coreos/etcd v3.3.15+incompatible
 	github.com/go-logr/logr v0.1.0
 	github.com/go-openapi/spec v0.19.2
 	github.com/openshift/api v3.9.1-0.20190924102528-32369d4db2ad+incompatible

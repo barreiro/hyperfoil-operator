@@ -2,6 +2,8 @@ package hyperfoil
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"sort"
@@ -13,7 +15,7 @@ import (
 	routev1 "github.com/openshift/api/route/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -118,7 +120,7 @@ func (r *ReconcileHyperfoil) Reconcile(request reconcile.Request) (reconcile.Res
 	// Fetch the Hyperfoil instance
 	instance := &hyperfoilv1alpha2.Hyperfoil{}
 	if err := r.client.Get(context.TODO(), request.NamespacedName, instance); err != nil {
-		if errors.IsNotFound(err) {
+		if k8sErrors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
 			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
 			// Return and don't requeue
@@ -158,15 +160,25 @@ func (r *ReconcileHyperfoil) Reconcile(request reconcile.Request) (reconcile.Res
 		return reconcile.Result{}, err
 	}
 
-	controllerRoute := controllerRoute(instance)
+	controllerRoute, err := controllerRoute(r, instance, logger)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
 	if err := ensureSame(r, instance, logger, controllerRoute, "Route",
 		&routev1.Route{}, compareControllerRoute, checkControllerRoute); err != nil {
 		return reconcile.Result{}, err
 	}
+	if instance.Spec.Auth.Secret != "" && instance.Spec.Route.Type == "http" {
+		updateStatus(r, instance, "Error", "Auth secret is set but the route is not encrypted.")
+		return reconcile.Result{}, errors.New("auth secret is set but the route is not encrypted")
+	} else if instance.Spec.Route.Type == "passthrough" && instance.Spec.Route.TLS == "" {
+		updateStatus(r, instance, "Error", "Passthrough route must have TLS secret defined.")
+		return reconcile.Result{}, errors.New("passthrough route must have TLS secret defined")
+	}
 
 	// This is a hack to workaround not being able to guess the route name ahead
 	actualRoute := routev1.Route{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Name: instance.Name, Namespace: instance.Namespace}, &actualRoute)
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: instance.Name, Namespace: instance.Namespace}, &actualRoute)
 	if err == nil {
 		routeHost = actualRoute.Spec.Host
 	}
@@ -218,10 +230,12 @@ func ensureSame(r *ReconcileHyperfoil, instance *hyperfoilv1alpha2.Hyperfoil, lo
 
 	// Check if this Pod already exists
 	err := r.client.Get(context.TODO(), types.NamespacedName{Name: object.GetName(), Namespace: object.GetNamespace()}, out)
-	if err != nil && errors.IsNotFound(err) {
+	if err != nil && k8sErrors.IsNotFound(err) {
 		logger.Info("Creating a new "+resourceType, resourceType+".Namespace", object.GetNamespace(), resourceType+".Name", object.GetName())
 		err = r.client.Create(context.TODO(), object)
 		if err != nil {
+			bytes, _ := json.MarshalIndent(object, "", "  ")
+			logger.Info("Failed object: " + string(bytes))
 			updateStatus(r, instance, "Error", "Cannot create "+resourceType+" "+object.GetName())
 			return err
 		}
@@ -258,7 +272,7 @@ func controllerRole(cr *hyperfoilv1alpha2.Hyperfoil) *rbacv1.Role {
 			Namespace: cr.Namespace,
 		},
 		Rules: []rbacv1.PolicyRule{
-			rbacv1.PolicyRule{
+			{
 				APIGroups: []string{""},
 				Verbs: []string{
 					"*",
@@ -292,7 +306,7 @@ func controllerRoleBinding(cr *hyperfoilv1alpha2.Hyperfoil) *rbacv1.RoleBinding 
 			Name:     "controller",
 		},
 		Subjects: []rbacv1.Subject{
-			rbacv1.Subject{
+			{
 				Kind:      "ServiceAccount",
 				Name:      "controller",
 				Namespace: cr.Namespace,
@@ -329,10 +343,16 @@ func controllerPod(cr *hyperfoilv1alpha2.Hyperfoil) *corev1.Pod {
 		deployTimeout = cr.Spec.AgentDeployTimeout
 	}
 	var externalURI string
-	if cr.Spec.Route != "" {
-		externalURI = "http://" + cr.Spec.Route
+	var protocol string
+	if cr.Spec.Route.Type == "http" {
+		protocol = "http"
 	} else {
-		externalURI = "http://" + routeHost
+		protocol = "https"
+	}
+	if cr.Spec.Route.Host != "" {
+		externalURI = protocol + "://" + cr.Spec.Route.Host
+	} else {
+		externalURI = protocol + "://" + routeHost
 	}
 	command := []string{
 		"/deployment/bin/controller.sh",
@@ -345,7 +365,7 @@ func controllerPod(cr *hyperfoilv1alpha2.Hyperfoil) *corev1.Pod {
 	}
 	volumes := []corev1.Volume{}
 	volumeMounts := []corev1.VolumeMount{
-		corev1.VolumeMount{
+		{
 			Name:      "hyperfoil",
 			MountPath: "/var/hyperfoil",
 		},
@@ -402,9 +422,24 @@ func controllerPod(cr *hyperfoilv1alpha2.Hyperfoil) *corev1.Pod {
 	if cr.Spec.TriggerURL != "" {
 		command = append(command, "-Dio.hyperfoil.trigger.url="+cr.Spec.TriggerURL)
 	}
-	envVars := make([]corev1.EnvFromSource, 0)
+
+	envVars := make([]corev1.EnvVar, 0)
+	if cr.Spec.Auth.Secret != "" {
+		envVars = append(envVars, corev1.EnvVar{
+			Name: "IO_HYPERFOIL_CONTROLLER_PASSWORD",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: cr.Spec.Auth.Secret,
+					},
+					Key: "password",
+				},
+			},
+		})
+	}
+	envFrom := make([]corev1.EnvFromSource, 0)
 	for _, secret := range cr.Spec.SecretEnvVars {
-		envVars = append(envVars, corev1.EnvFromSource{
+		envFrom = append(envFrom, corev1.EnvFromSource{
 			SecretRef: &corev1.SecretEnvSource{
 				LocalObjectReference: corev1.LocalObjectReference{
 					Name: secret,
@@ -412,6 +447,37 @@ func controllerPod(cr *hyperfoilv1alpha2.Hyperfoil) *corev1.Pod {
 			},
 		})
 	}
+
+	if cr.Spec.Route.Type == "reencrypt" || cr.Spec.Route.Type == "passthrough" {
+		// for reencrypt routes the certificate is generated by an annotation at the service
+		secret := cr.Name
+		if cr.Spec.Route.Type == "passthrough" {
+			secret = cr.Spec.Route.TLS
+		}
+		volumes = append(volumes, corev1.Volume{
+			Name: "certs",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: secret,
+				},
+			},
+		})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      "certs",
+			MountPath: "/var/hyperfoil/certs/",
+			ReadOnly:  true,
+		})
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  "IO_HYPERFOIL_CONTROLLER_PEM_CERTS",
+			Value: "/var/hyperfoil/certs/" + corev1.TLSCertKey,
+		}, corev1.EnvVar{
+			Name:  "IO_HYPERFOIL_CONTROLLER_PEM_KEYS",
+			Value: "/var/hyperfoil/certs/" + corev1.TLSPrivateKeyKey,
+		})
+	} else if cr.Spec.Route.Type == "edge" || cr.Spec.Route.Type == "" {
+		command = append(command, "-Dio.hyperfoil.controller.secured.via.proxy=true")
+	}
+
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cr.Name + "-controller",
@@ -427,7 +493,8 @@ func controllerPod(cr *hyperfoilv1alpha2.Hyperfoil) *corev1.Pod {
 					Command:         command,
 					VolumeMounts:    volumeMounts,
 					ImagePullPolicy: imagePullPolicy,
-					EnvFrom:         envVars,
+					Env:             envVars,
+					EnvFrom:         envFrom,
 				},
 			},
 			Volumes:            volumes,
@@ -500,8 +567,19 @@ func compareControllerPod(i1 interface{}, i2 interface{}, logger logr.Logger) bo
 		logger.Info("Commands don't match: " + fmt.Sprintf("%v | %v", c1.Command, c2.Command))
 		return false
 	}
-	if len(c1.EnvFrom) != len(c2.EnvFrom) {
+	if len(c1.Env) != len(c2.Env) {
 		logger.Info("Env vars differ " + fmt.Sprintf("%v vs %v", len(c1.Env), len(c2.Env)))
+		return false
+	}
+	for i, ev1 := range c1.Env {
+		ev2 := c2.Env[i]
+		if !reflect.DeepEqual(ev1, ev2) {
+			return false
+		}
+	}
+
+	if len(c1.EnvFrom) != len(c2.EnvFrom) {
+		logger.Info("Env vars differ " + fmt.Sprintf("%v vs %v", len(c1.EnvFrom), len(c2.EnvFrom)))
 		return false
 	}
 	for i, ef1 := range c1.EnvFrom {
@@ -627,6 +705,9 @@ func controllerService(cr *hyperfoilv1alpha2.Hyperfoil) *corev1.Service {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cr.Name,
 			Namespace: cr.Namespace,
+			Annotations: map[string]string{
+				"service.beta.openshift.io/serving-cert-secret-name": cr.Name,
+			},
 		},
 		Spec: corev1.ServiceSpec{
 			Type: corev1.ServiceTypeClusterIP,
@@ -635,7 +716,7 @@ func controllerService(cr *hyperfoilv1alpha2.Hyperfoil) *corev1.Service {
 				"role": "controller",
 			},
 			Ports: []corev1.ServicePort{
-				corev1.ServicePort{
+				{
 					Port: int32(8090),
 					TargetPort: intstr.IntOrString{
 						StrVal: "8090-8090",
@@ -646,10 +727,14 @@ func controllerService(cr *hyperfoilv1alpha2.Hyperfoil) *corev1.Service {
 	}
 }
 
-func controllerRoute(cr *hyperfoilv1alpha2.Hyperfoil) *routev1.Route {
+func controllerRoute(r *ReconcileHyperfoil, cr *hyperfoilv1alpha2.Hyperfoil, logger logr.Logger) (*routev1.Route, error) {
 	subdomain := ""
-	if cr.Spec.Route == "" {
+	if cr.Spec.Route.Host == "" {
 		subdomain = cr.Name
+	}
+	tls, err := tls(r, cr, logger)
+	if err != nil {
+		return nil, err
 	}
 	return &routev1.Route{
 		ObjectMeta: metav1.ObjectMeta{
@@ -657,15 +742,58 @@ func controllerRoute(cr *hyperfoilv1alpha2.Hyperfoil) *routev1.Route {
 			Namespace: cr.Namespace,
 		},
 		Spec: routev1.RouteSpec{
-			Host: cr.Spec.Route,
+			Host: cr.Spec.Route.Host,
 			// If the Host is not set (empty) we'll use CR's name
 			Subdomain: subdomain,
 			To: routev1.RouteTargetReference{
 				Kind: "Service",
 				Name: cr.Name,
 			},
+			TLS: tls,
 		},
+	}, nil
+}
+
+func tls(r *ReconcileHyperfoil, cr *hyperfoilv1alpha2.Hyperfoil, logger logr.Logger) (*routev1.TLSConfig, error) {
+	switch cr.Spec.Route.Type {
+	case "http":
+		return nil, nil
+	case "passthrough":
+		return &routev1.TLSConfig{
+			Termination:                   routev1.TLSTerminationPassthrough,
+			InsecureEdgeTerminationPolicy: routev1.InsecureEdgeTerminationPolicyRedirect,
+		}, nil
 	}
+	tlsSecret := corev1.Secret{}
+	if cr.Spec.Route.TLS != "" {
+		if error := r.client.Get(context.TODO(), types.NamespacedName{Name: cr.Spec.Route.TLS, Namespace: cr.Namespace}, &tlsSecret); error != nil {
+			updateStatus(r, cr, "Error", "Cannot find secret "+cr.Spec.Route.TLS)
+			return nil, error
+		}
+	}
+	cacert := ""
+	if bytes, ok := tlsSecret.Data["ca.crt"]; ok {
+		cacert = string(bytes)
+	}
+	var termination routev1.TLSTerminationType
+	switch cr.Spec.Route.Type {
+	case "edge", "":
+		termination = routev1.TLSTerminationEdge
+	case "passthrough":
+		termination = routev1.TLSTerminationPassthrough
+	case "reencrypt":
+		termination = routev1.TLSTerminationReencrypt
+	default:
+		logger.Info("Invalid route type: " + cr.Spec.Route.Type)
+		return nil, errors.New("Invalid route type: " + cr.Spec.Route.Type)
+	}
+	return &routev1.TLSConfig{
+		Termination:                   termination,
+		InsecureEdgeTerminationPolicy: routev1.InsecureEdgeTerminationPolicyRedirect,
+		Certificate:                   string(tlsSecret.Data[corev1.TLSCertKey]),
+		Key:                           string(tlsSecret.Data[corev1.TLSPrivateKeyKey]),
+		CACertificate:                 cacert,
+	}, nil
 }
 
 func compareControllerRoute(i1 interface{}, i2 interface{}, logger logr.Logger) bool {
@@ -676,10 +804,28 @@ func compareControllerRoute(i1 interface{}, i2 interface{}, logger logr.Logger) 
 		return false
 	}
 	if r1.Spec.Host == "" {
-		return r1.Spec.Subdomain == r2.Spec.Subdomain
-	} else {
-		return r1.Spec.Host == r2.Spec.Host
+		if r1.Spec.Subdomain != r2.Spec.Subdomain {
+			return false
+		}
+	} else if r1.Spec.Host != r2.Spec.Host {
+		return false
 	}
+	if r1.Spec.TLS == nil && r2.Spec.TLS == nil {
+		return true
+	} else if r1.Spec.TLS == nil || r2.Spec.TLS == nil {
+		logger.Info("Different TLS setup: " + fmt.Sprintf("%v | %v", r1.Spec.TLS, r2.Spec.TLS))
+		return false
+	}
+	if r1.Spec.TLS.Termination != r2.Spec.TLS.Termination {
+		return false
+	} else if r1.Spec.TLS.Certificate != r2.Spec.TLS.Certificate {
+		return false
+	} else if r1.Spec.TLS.Key != r2.Spec.TLS.Key {
+		return false
+	} else if r1.Spec.TLS.CACertificate != r2.Spec.TLS.CACertificate {
+		return false
+	}
+	return true
 }
 
 func checkControllerRoute(i interface{}) (bool, string, string) {

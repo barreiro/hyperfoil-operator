@@ -11,9 +11,10 @@ metadata:
             "name": "example-hyperfoil"
           },
           "spec": {
-            "agentDeployTimeout": 60000,
-            "log": "myConfigMap/log4j2-superverbose.xml",
-            "route": "hyperfoil.apps.mycloud.example.com",
+            "agentDeployTimeout": 120000,
+            "route": {
+              "host": "hyperfoil.apps.mycloud.example.com"
+            },
             "version": "latest"
           }
         }
@@ -45,11 +46,6 @@ spec:
           Controller image. If 'version' is defined, too, the tag is replaced (or appended).
           Defaults to 'quay.io/hyperfoil/hyperfoil'
         displayName: Image
-        x-descriptors:
-        - 'urn:alm:descriptor:com.tectonic.ui:text'
-      - path: route
-        description: Host for the route leading to Controller REST endpoint.
-        displayName: Route
         x-descriptors:
         - 'urn:alm:descriptor:com.tectonic.ui:text'
       - path: log
@@ -92,13 +88,33 @@ spec:
         displayName: Persistent volume claim
         x-descriptors:
         - 'urn:alm:descriptor:com.tectonic.ui:text'
+      - path: route.host
+        description: Host for the route leading to Controller REST endpoint.
+        displayName: Route Host
+        x-descriptors:
+        - 'urn:alm:descriptor:com.tectonic.ui:text'
+      - path: route.tls
+        description: Optional for edge and reencrypt routes, required for passthrough; Name of the secret hosting `tls.crt`, `tls.key` and optionally `ca.crt`
+        displayName: Route TLS secret
+        x-descriptors:
+        - 'urn:alm:descriptor:com.tectonic.ui:Secret'
+      - path: route.type
+        description: Either 'http' (for plain-text routes - not recommended), 'edge', 'reencrypt' or 'passthrough'
+        displayName: Route Type
+        x-descriptors:
+        - 'urn:alm:descriptor:com.tectonic.ui:text'
+      - path: auth.secret
+        description: Optional; Name of secret used for basic authentication. Must contain key 'password'.
+        displayName: Auth secret
+        x-descriptors:
+        - 'urn:alm:descriptor:com.tectonic.ui:Secret'
       - path: secretEnvVars
         description: >
           List of secrets in this namespace; each entry from those secrets will be mapped
           as environment variable, using the key as variable name.
         displayName: Environment variables imported from secrets
         x-descriptors:
-        - 'urn:alm:descriptor:com.tectonic.ui:text'
+        - 'urn:alm:descriptor:com.tectonic.ui:Secret'
       statusDescriptors:
       - path: status
         description: Status
