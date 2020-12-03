@@ -21,10 +21,10 @@ metadata:
       ]
     categories: Developer Tools
     repository: https://github.com/Hyperfoil/hyperfoil-operator
-    containerImage: quay.io/hyperfoil/hyperfoil-operator:0.5.3
+    containerImage: quay.io/hyperfoil/hyperfoil-operator:0.12.0
     description: Microservice-oriented distributed benchmark framework.
     capabilities: Basic Install
-  name: hyperfoil-operator.v0.5.3
+  name: hyperfoil-operator.v0.12.0
   namespace: openshift-operators
 spec:
   apiservicedefinitions: {}
@@ -168,7 +168,7 @@ spec:
                       fieldPath: metadata.name
                 - name: OPERATOR_NAME
                   value: hyperfoil-operator
-                image: quay.io/hyperfoil/hyperfoil-operator:0.5.3
+                image: quay.io/hyperfoil/hyperfoil-operator:0.12.0
                 imagePullPolicy: Always
                 name: hyperfoil-operator
                 resources: {}
@@ -251,4 +251,4 @@ spec:
   provider:
     name: Red Hat, Inc.
   replaces: hyperfoil-operator.v0.5.2
-  version: 0.5.3
+  version: 0.12.0
