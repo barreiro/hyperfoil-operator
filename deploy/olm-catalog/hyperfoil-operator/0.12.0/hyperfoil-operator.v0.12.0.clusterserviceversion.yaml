@@ -183,6 +183,7 @@ spec:
           - configmaps
           - serviceaccounts
           - secrets
+          - persistentvolumeclaims
           verbs:
           - '*'
         - apiGroups:

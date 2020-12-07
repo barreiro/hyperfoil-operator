@@ -16,6 +16,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
+	k8sResource "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -181,6 +182,32 @@ func (r *ReconcileHyperfoil) Reconcile(request reconcile.Request) (reconcile.Res
 	err = r.client.Get(context.TODO(), types.NamespacedName{Name: instance.Name, Namespace: instance.Namespace}, &actualRoute)
 	if err == nil {
 		routeHost = actualRoute.Spec.Host
+	}
+
+	pvc := corev1.PersistentVolumeClaim{}
+	if instance.Spec.PersistentVolumeClaim != "" {
+		storage, _ := k8sResource.ParseQuantity("1G")
+		pvc = corev1.PersistentVolumeClaim{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      instance.Spec.PersistentVolumeClaim,
+				Namespace: instance.Namespace,
+			},
+			Spec: corev1.PersistentVolumeClaimSpec{
+				AccessModes: []corev1.PersistentVolumeAccessMode{
+					corev1.ReadWriteOnce,
+				},
+				VolumeName: instance.Spec.PersistentVolumeClaim,
+				Resources: corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						"storage": storage,
+					},
+				},
+			},
+		}
+		if err := ensureSame(r, instance, logger, &pvc, "PersistentVolumeClaim",
+			&corev1.PersistentVolumeClaim{}, nocompare, checkControllerRoute); err != nil {
+			return reconcile.Result{}, err
+		}
 	}
 
 	controllerPod := controllerPod(instance)
