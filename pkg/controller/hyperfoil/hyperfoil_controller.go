@@ -205,7 +205,7 @@ func (r *ReconcileHyperfoil) Reconcile(request reconcile.Request) (reconcile.Res
 			},
 		}
 		if err := ensureSame(r, instance, logger, &pvc, "PersistentVolumeClaim",
-			&corev1.PersistentVolumeClaim{}, nocompare, checkControllerRoute); err != nil {
+			&corev1.PersistentVolumeClaim{}, nocompare, nocheck); err != nil {
 			return reconcile.Result{}, err
 		}
 	}
@@ -767,6 +767,9 @@ func controllerRoute(r *ReconcileHyperfoil, cr *hyperfoilv1alpha2.Hyperfoil, log
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cr.Name,
 			Namespace: cr.Namespace,
+			Labels: map[string]string{
+				"hyperfoil": cr.Name,
+			},
 		},
 		Spec: routev1.RouteSpec{
 			Host: cr.Spec.Route.Host,
