@@ -222,6 +222,12 @@ func (r *ReconcileHyperfoil) Reconcile(request reconcile.Request) (reconcile.Res
 		return reconcile.Result{}, err
 	}
 
+	controllerClusterService := controllerClusterService(instance)
+	if err := ensureSame(r, instance, logger, controllerClusterService, "Service",
+		&corev1.Service{}, nocompare, nocheck); err != nil {
+		return reconcile.Result{}, err
+	}
+
 	r.client.Status().Update(context.TODO(), instance)
 
 	return reconcile.Result{}, nil
@@ -747,6 +753,31 @@ func controllerService(cr *hyperfoilv1alpha2.Hyperfoil) *corev1.Service {
 					Port: int32(8090),
 					TargetPort: intstr.IntOrString{
 						StrVal: "8090-8090",
+					},
+				},
+			},
+		},
+	}
+}
+
+func controllerClusterService(cr *hyperfoilv1alpha2.Hyperfoil) *corev1.Service {
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cr.Name + "-cluster",
+			Namespace: cr.Namespace,
+		},
+		Spec: corev1.ServiceSpec{
+			Type:      corev1.ServiceTypeClusterIP,
+			ClusterIP: "None",
+			Selector: map[string]string{
+				"app":  cr.Name,
+				"role": "controller",
+			},
+			Ports: []corev1.ServicePort{
+				{
+					Port: int32(7800),
+					TargetPort: intstr.IntOrString{
+						StrVal: "7800-7800",
 					},
 				},
 			},
