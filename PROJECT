@@ -1,0 +1,17 @@
+domain: hyperfoil.io
+layout: go.kubebuilder.io/v3
+plugins:
+  manifests.sdk.operatorframework.io/v2: {}
+  scorecard.sdk.operatorframework.io/v2: {}
+projectName: hyperfoil-operator
+repo: github.com/Hyperfoil/hyperfoil-operator
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: hyperfoil.io
+  kind: Hyperfoil
+  path: github.com/Hyperfoil/hyperfoil-operator/api/v1alpha2
+  version: v1alpha2
+version: "3"

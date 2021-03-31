@@ -1,0 +1,9 @@
+apiVersion: hyperfoil.io/v1alpha2
+kind: Hyperfoil
+metadata:
+  name: hyperfoil
+spec:
+  agentDeployTimeout: 120000,
+  route:
+    host: hyperfoil.apps.mycloud.example.com
+  version: latest
