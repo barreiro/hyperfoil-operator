@@ -38,15 +38,20 @@ spec:
         description: Hyperfoil is the Schema for the hyperfoils API
         properties:
           apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
             type: string
           kind:
-            description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
             type: string
           metadata:
             type: object
           spec:
-            description: HyperfoilSpec Configures Hyperfoil Controller and related resources.
+            description: HyperfoilSpec Configures Hyperfoil Controller and related
+              resources.
             properties:
               agentDeployTimeout:
                 description: Deploy timeout for agents, in milliseconds.
@@ -55,25 +60,32 @@ spec:
                 description: Authentication/authorization settings.
                 properties:
                   secret:
-                    description: Optional; Name of secret used for basic authentication. Must contain key 'password'.
+                    description: Optional; Name of secret used for basic authentication.
+                      Must contain key 'password'.
                     type: string
                 type: object
               image:
-                description: Controller image. If 'version' is defined, too, the tag is replaced (or appended). Defaults to 'quay.io/hyperfoil/hyperfoil'
+                description: Controller image. If 'version' is defined, too, the tag
+                  is replaced (or appended). Defaults to 'quay.io/hyperfoil/hyperfoil'
                 type: string
               log:
-                description: 'Name of the config map and optionally its entry (separated by ''/'': e.g myconfigmap/log4j2-superverbose.xml) storing Log4j2 configuration file. By default the Controller uses its embedded configuration.'
+                description: 'Name of the config map and optionally its entry (separated
+                  by ''/'': e.g myconfigmap/log4j2-superverbose.xml) storing Log4j2
+                  configuration file. By default the Controller uses its embedded
+                  configuration.'
                 type: string
               persistentVolumeClaim:
                 description: Name of the PVC hyperfoil should mount for its workdir.
                 type: string
               postHooks:
-                description: Names of config maps and optionally keys (separated by '/') holding hooks that run after the run finishes.
+                description: Names of config maps and optionally keys (separated by
+                  '/') holding hooks that run after the run finishes.
                 items:
                   type: string
                 type: array
               preHooks:
-                description: Names of config maps and optionally keys (separated by '/') holding hooks that run before the run starts.
+                description: Names of config maps and optionally keys (separated by
+                  '/') holding hooks that run before the run starts.
                 items:
                   type: string
                 type: array
@@ -81,25 +93,40 @@ spec:
                 description: Specification of the exposed route.
                 properties:
                   host:
-                    description: 'Host for the route leading to Controller REST endpoint. Example: hyperfoil.apps.cloud.example.com'
+                    description: 'Host for the route leading to Controller REST endpoint.
+                      Example: hyperfoil.apps.cloud.example.com'
                     type: string
                   tls:
-                    description: Optional for edge and reencrypt routes, required for passthrough; Name of the secret hosting `tls.crt`, `tls.key` and optionally `ca.crt`
+                    description: Optional for edge and reencrypt routes, required
+                      for passthrough; Name of the secret hosting `tls.crt`, `tls.key`
+                      and optionally `ca.crt`
                     type: string
                   type:
-                    description: Either 'http' (for plain-text routes - not recommended), 'edge', 'reencrypt' or 'passthrough'
+                    description: Either 'http' (for plain-text routes - not recommended),
+                      'edge', 'reencrypt' or 'passthrough'
                     type: string
                 type: object
               secretEnvVars:
-                description: List of secrets in this namespace; each entry from those secrets will be mapped as environment variable, using the key as variable name.
+                description: List of secrets in this namespace; each entry from those
+                  secrets will be mapped as environment variable, using the key as
+                  variable name.
                 items:
                   type: string
                 type: array
               triggerUrl:
-                description: If this is set the controller does not start benchmark run right away after hitting /benchmark/my-benchmark/start ; instead it responds with status 301 and header Location set to concatenation of this string and 'BENCHMARK=my-benchmark&RUN_ID=xxxx'. CLI interprets that response as a request to hit CI instance on this URL, assuming that CI will trigger a new job that will eventually call /benchmark/my-benchmark/start?runId=xxxx with header 'x-trigger-job'. This is useful if the the CI has to synchronize Hyperfoil to other benchmarks that don't use this controller instance.
+                description: If this is set the controller does not start benchmark
+                  run right away after hitting /benchmark/my-benchmark/start ; instead
+                  it responds with status 301 and header Location set to concatenation
+                  of this string and 'BENCHMARK=my-benchmark&RUN_ID=xxxx'. CLI interprets
+                  that response as a request to hit CI instance on this URL, assuming
+                  that CI will trigger a new job that will eventually call /benchmark/my-benchmark/start?runId=xxxx
+                  with header 'x-trigger-job'. This is useful if the the CI has to
+                  synchronize Hyperfoil to other benchmarks that don't use this controller
+                  instance.
                 type: string
               version:
-                description: Tag for controller image. Defaults to version matching the operator version.
+                description: Tag for controller image. Defaults to version matching
+                  the operator version.
                 type: string
             type: object
           status:

@@ -3,7 +3,7 @@ kind: Hyperfoil
 metadata:
   name: hyperfoil
 spec:
-  agentDeployTimeout: 120000,
+  agentDeployTimeout: 120000
   route:
     host: hyperfoil.apps.mycloud.example.com
   version: latest

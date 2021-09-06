@@ -11,7 +11,7 @@ metadata:
             "name": "hyperfoil"
           },
           "spec": {
-            "agentDeployTimeout": "120000",
+            "agentDeployTimeout": 120000,
             "route": {
               "host": "hyperfoil.apps.mycloud.example.com"
             },
@@ -23,7 +23,7 @@ metadata:
     categories: Developer Tools
     containerImage: quay.io/hyperfoil/hyperfoil-operator:0.15.0
     description: Microservice-oriented distributed benchmark framework.
-    operators.operatorframework.io/builder: operator-sdk-v1.4.0+git
+    operators.operatorframework.io/builder: operator-sdk-v1.10.0+git
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
     repository: https://github.com/Hyperfoil/hyperfoil-operator
   name: hyperfoil-operator.v0.15.0
@@ -46,8 +46,7 @@ spec:
     Hyperfoil is licensed under Apache License 2.0
   displayName: Hyperfoil
   icon:
-  - mediatype: image/png
-    base64data: |-
+  - base64data: |-
       iVBORw0KGgoAAAANSUhEUgAAAMgAAADICAYAAACtWK6eAAAACXBIWXMAAAsSAAALEgHS3X78AAAP
       eklEQVR4nO2d22+UxxnGJ1VCIRhswhkTWCBuujIBk4aENCU2apMUmhVO2lSNVBVa9bp1b3zRi4rc
       +qIlf0DVVupd1MiRo0RqLwqVclCaNJiCVikJXXMIxpDYxEZOSSSqd5nPjMcz32m/wxyen4Swd9e7
@@ -119,6 +118,7 @@ spec:
       AALJEAjDPSCQDIAw3AUCaYEWGwgDjnNhOD+l0EYgkBRAGP4AgSSkOjgy3OI54hCGRaDdPQW8rhEc
       jhlXLBCGhUAgLcL7qfqFE2Xl1hEIw2IgkIwRziOv8F4pCMNiIBAAQsDgOABCgEAACAECASAECASA
       ECAQAEKAQAAIAQIBIAQIBIAQIBAAQoBAANDBGPs/klV5kw6j1HYAAAAASUVORK5CYII=
+    mediatype: image/png
   install:
     spec:
       clusterPermissions:
