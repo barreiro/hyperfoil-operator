@@ -20,29 +20,20 @@ rules:
   - configmaps
   - persistentvolumeclaims
   - pods
+  - pods/finalizer
+  - pods/log
+  - pods/status
   - secrets
   - serviceaccounts
   - services
   verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
+  - '*'
 - apiGroups:
   - hyperfoil.io
   resources:
   - hyperfoils
   verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
+  - '*'
 - apiGroups:
   - hyperfoil.io
   resources:
@@ -70,23 +61,11 @@ rules:
   - rolebindings
   - roles
   verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
+  - '*'
 - apiGroups:
   - route.openshift.io
   resources:
   - routes
   - routes/custom-host
   verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
+  - '*'

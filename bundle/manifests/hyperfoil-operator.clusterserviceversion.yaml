@@ -26,8 +26,7 @@ metadata:
     operators.operatorframework.io/builder: operator-sdk-v1.10.0+git
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
     repository: https://github.com/Hyperfoil/hyperfoil-operator
-  name: hyperfoil-operator.v0.15.0
-  namespace: openshift-operators
+  name: hyperfoil-operator.v0.15.1
 spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
@@ -137,29 +136,20 @@ spec:
           - configmaps
           - persistentvolumeclaims
           - pods
+          - pods/finalizer
+          - pods/log
+          - pods/status
           - secrets
           - serviceaccounts
           - services
           verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
+          - '*'
         - apiGroups:
           - hyperfoil.io
           resources:
           - hyperfoils
           verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
+          - '*'
         - apiGroups:
           - hyperfoil.io
           resources:
@@ -187,26 +177,14 @@ spec:
           - rolebindings
           - roles
           verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
+          - '*'
         - apiGroups:
           - route.openshift.io
           resources:
           - routes
           - routes/custom-host
           verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
+          - '*'
         - apiGroups:
           - authentication.k8s.io
           resources:
@@ -251,7 +229,7 @@ spec:
                 - --leader-elect
                 command:
                 - /manager
-                image: quay.io/hyperfoil/hyperfoil-operator:0.15.0
+                image: quay.io/hyperfoil/hyperfoil-operator:0.15.1
                 imagePullPolicy: Always
                 livenessProbe:
                   httpGet:
@@ -269,10 +247,10 @@ spec:
                 resources:
                   limits:
                     cpu: 100m
-                    memory: 30Mi
+                    memory: 256Mi
                   requests:
                     cpu: 100m
-                    memory: 20Mi
+                    memory: 32Mi
                 securityContext:
                   allowPrivilegeEscalation: false
               securityContext:
@@ -332,5 +310,5 @@ spec:
   maturity: alpha
   provider:
     name: Red Hat, Inc.
-  replaces: hyperfoil-operator.v0.12.0
-  version: 0.15.0
+  replaces: hyperfoil-operator.v0.15.0
+  version: 0.15.1

@@ -53,14 +53,14 @@ type HyperfoilReconciler struct {
 
 var routeHost = "load.me"
 
-//+kubebuilder:rbac:groups=hyperfoil.io,resources=hyperfoils,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=hyperfoil.io,resources=hyperfoils,verbs="*"
 //+kubebuilder:rbac:groups=hyperfoil.io,resources=hyperfoils/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=hyperfoil.io,resources=hyperfoils/finalizers,verbs=update
-//+kubebuilder:rbac:groups=core,resources=pods;services;configmaps;serviceaccounts;secrets;persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=core,resources=pods;pods/finalizer;pods/log;pods/status;services;configmaps;serviceaccounts;secrets;persistentvolumeclaims,verbs="*"
 //+kubebuilder:rbac:groups=monitoring.coreos.com,resources=servicemonitors,verbs=get;create
 //+kubebuilder:rbac:groups=apps,resourceNames=hyperfoil-operator,resources=deployments/finalizers,verbs=update
-//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles;rolebindings,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=route.openshift.io,resources=routes;routes/custom-host,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles;rolebindings,verbs="*"
+//+kubebuilder:rbac:groups=route.openshift.io,resources=routes;routes/custom-host,verbs="*"
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -704,6 +704,7 @@ func controllerService(cr *hyperfoilv1alpha2.Hyperfoil) *corev1.Service {
 					Port: int32(8090),
 					TargetPort: intstr.IntOrString{
 						StrVal: "8090-8090",
+						IntVal: 8090,
 					},
 				},
 			},
@@ -729,6 +730,7 @@ func controllerClusterService(cr *hyperfoilv1alpha2.Hyperfoil) *corev1.Service {
 					Port: int32(7800),
 					TargetPort: intstr.IntOrString{
 						StrVal: "7800-7800",
+						IntVal: 7800,
 					},
 				},
 			},
