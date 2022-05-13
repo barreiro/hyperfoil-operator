@@ -347,6 +347,8 @@ func controllerPod(cr *hyperfoilv1alpha2.Hyperfoil) *corev1.Pod {
 		"-Dio.hyperfoil.controller.external.uri=" + externalURI,
 		"-Dio.hyperfoil.rootdir=/var/hyperfoil/",
 	}
+	command = append(command, cr.Spec.AdditionalArgs...)
+
 	volumes := []corev1.Volume{}
 	volumeMounts := []corev1.VolumeMount{
 		{
