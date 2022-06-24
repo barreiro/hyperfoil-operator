@@ -21,15 +21,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"reflect"
-	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/go-logr/logr"
+	"github.com/google/go-cmp/cmp"
 	routev1 "github.com/openshift/api/route/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	k8sResource "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -543,46 +543,15 @@ func compareControllerPod(i1 interface{}, i2 interface{}, logger logr.Logger) bo
 		logger.Info("Cannot cast to Pods: " + fmt.Sprintf("%v | %v", i1, i2))
 		return false
 	}
-	c1 := p1.Spec.Containers[0]
-	c2 := p2.Spec.Containers[0]
-	if c1.Image != c2.Image {
-		logger.Info("Images don't match: " + c1.Image + " | " + c2.Image)
-		return false
-	}
-	if !reflect.DeepEqual(c1.Command, c2.Command) {
-		logger.Info("Commands don't match: " + fmt.Sprintf("%v | %v", c1.Command, c2.Command))
-		return false
-	}
-	if len(c1.Env) != len(c2.Env) {
-		logger.Info("Env vars differ " + fmt.Sprintf("%v vs %v", len(c1.Env), len(c2.Env)))
-		return false
-	}
-	for i, ev1 := range c1.Env {
-		ev2 := c2.Env[i]
-		if !reflect.DeepEqual(ev1, ev2) {
-			return false
-		}
+
+	// Compare for equality only whatever field is set in p1.Spec.
+	if equality.Semantic.DeepDerivative(p1.Spec, p2.Spec) {
+		return true
 	}
 
-	if len(c1.EnvFrom) != len(c2.EnvFrom) {
-		logger.Info("Env vars differ " + fmt.Sprintf("%v vs %v", len(c1.EnvFrom), len(c2.EnvFrom)))
-		return false
-	}
-	for i, ef1 := range c1.EnvFrom {
-		ef2 := c2.EnvFrom[i]
-		if ef1.SecretRef == nil || ef2.SecretRef == nil || ef1.SecretRef.LocalObjectReference.Name != ef2.SecretRef.LocalObjectReference.Name {
-			logger.Info("Secrets for env vars don't match.")
-			return false
-		}
-	}
-	if !compareVolume(p1.Spec.Volumes, p2.Spec.Volumes, "log", logger) ||
-		!compareVolume(p1.Spec.Volumes, p2.Spec.Volumes, "prehooks", logger) ||
-		!compareVolume(p1.Spec.Volumes, p2.Spec.Volumes, "posthooks", logger) ||
-		!compareVolume(p1.Spec.Volumes, p2.Spec.Volumes, "hyperfoil", logger) {
-		return false
-	}
-
-	return true
+	diff := cmp.Diff(p1.Spec, p2.Spec)
+	logger.Info("Pod " + p1.GetName() + " diff (-want,+got):\n" + diff)
+	return false
 }
 
 func checkControllerPod(i interface{}) (bool, string, string) {
@@ -606,84 +575,6 @@ func checkControllerPod(i interface{}) (bool, string, string) {
 		}
 	}
 	return false, "Pending", " is not ready"
-}
-
-func findVolume(volumes []corev1.Volume, name string) (corev1.Volume, bool) {
-	for _, v := range volumes {
-		if v.Name == name {
-			return v, true
-		}
-	}
-	return corev1.Volume{}, false
-}
-
-func compareVolume(vs1 []corev1.Volume, vs2 []corev1.Volume, name string, logger logr.Logger) bool {
-	v1, h1 := findVolume(vs1, name)
-	v2, h2 := findVolume(vs2, name)
-	if h1 != h2 {
-		logger.Info("One of the pods has volume " + name + ", other does not")
-		return false
-	}
-	if !h1 && !h2 {
-		return true
-	}
-	// Make sure all use the same type
-	if (v1.VolumeSource.ConfigMap == nil) != (v2.VolumeSource.ConfigMap == nil) {
-		return false
-	} else if (v1.VolumeSource.EmptyDir == nil) != (v2.VolumeSource.EmptyDir == nil) {
-		return false
-	} else if (v1.VolumeSource.PersistentVolumeClaim == nil) != (v2.VolumeSource.PersistentVolumeClaim == nil) {
-		return false
-	} else if (v1.VolumeSource.Projected == nil) != (v2.VolumeSource.Projected == nil) {
-		return false
-	}
-	if v1.VolumeSource.ConfigMap != nil {
-		n1 := v1.VolumeSource.ConfigMap.LocalObjectReference.Name
-		n2 := v2.VolumeSource.ConfigMap.LocalObjectReference.Name
-		if n1 != n2 {
-			logger.Info("Names of ConfigMaps for volume " + name + " don't match: " + n1 + " | " + n2)
-			return false
-		}
-	} else if v1.VolumeSource.PersistentVolumeClaim != nil {
-		n1 := v1.VolumeSource.PersistentVolumeClaim.ClaimName
-		n2 := v1.VolumeSource.PersistentVolumeClaim.ClaimName
-		if n1 != n2 {
-			logger.Info("Names of PVCs for volume " + name + " don't match: " + n1 + " | " + n2)
-			return false
-		}
-	} else if v1.VolumeSource.Projected != nil {
-		p1 := v1.VolumeSource.Projected
-		p2 := v2.VolumeSource.Projected
-		if len(p1.Sources) != len(p2.Sources) {
-			logger.Info("Different number of projected sources for volume " + name)
-			return false
-		}
-		for _, s1 := range p1.Sources {
-			items1 := findItems(p1.Sources, s1.ConfigMap.Name)
-			items2 := findItems(p2.Sources, s1.ConfigMap.Name)
-
-			if !reflect.DeepEqual(items1, items2) {
-				logger.Info("List of keys for volume " + name + " and config map " + s1.ConfigMap.Name + " does not match.")
-				return false
-			}
-		}
-	}
-	return true
-}
-
-func findItems(sources []corev1.VolumeProjection, name string) []string {
-	keys := make([]string, 0)
-	for _, s := range sources {
-		if s.ConfigMap.Name == name {
-			if s.ConfigMap.Items == nil {
-				keys = append(keys, "___all___")
-			} else {
-				keys = append(keys, s.ConfigMap.Items[0].Key)
-			}
-		}
-	}
-	sort.Strings(keys)
-	return keys
 }
 
 func controllerService(cr *hyperfoilv1alpha2.Hyperfoil) *corev1.Service {
@@ -819,29 +710,16 @@ func compareControllerRoute(i1 interface{}, i2 interface{}, logger logr.Logger) 
 		logger.Info("Cannot cast to Routes: " + fmt.Sprintf("%v | %v", i1, i2))
 		return false
 	}
-	if r1.Spec.Host == "" {
-		if r1.Spec.Subdomain != r2.Spec.Subdomain {
-			return false
-		}
-	} else if r1.Spec.Host != r2.Spec.Host {
-		return false
-	}
-	if r1.Spec.TLS == nil && r2.Spec.TLS == nil {
+
+	// Compare for equality only whatever field is set in r1.Spec.
+	if equality.Semantic.DeepDerivative(r1.Spec, r2.Spec) {
 		return true
-	} else if r1.Spec.TLS == nil || r2.Spec.TLS == nil {
-		logger.Info("Different TLS setup: " + fmt.Sprintf("%v | %v", r1.Spec.TLS, r2.Spec.TLS))
-		return false
 	}
-	if r1.Spec.TLS.Termination != r2.Spec.TLS.Termination {
-		return false
-	} else if r1.Spec.TLS.Certificate != r2.Spec.TLS.Certificate {
-		return false
-	} else if r1.Spec.TLS.Key != r2.Spec.TLS.Key {
-		return false
-	} else if r1.Spec.TLS.CACertificate != r2.Spec.TLS.CACertificate {
-		return false
-	}
-	return true
+
+	diff := cmp.Diff(r1.Spec, r2.Spec)
+	logger.Info("Route " + r1.GetName() + " diff (-want, +got):\n" + diff)
+
+	return false
 }
 
 func checkControllerRoute(i interface{}) (bool, string, string) {
