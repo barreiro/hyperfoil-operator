@@ -5,12 +5,14 @@ This operator installs and configures Hyperfoil Controller. See example resource
 ## Building the operator
 
 ```bash
-# This creates and pushes the image (quay.io/hyperfoil/hyperfoil-operator:0.15.0)
+# Define your container repository.
+export CONTAINER_REPO_OVERRIDE="quay.io/hyperfoil" # default: quay.io/hyperfoil
+# This creates and pushes the image (${CONTAINER_REPO_OVERRIDE}/hyperfoil-operator:0.15.0)
 # Build is executed in a builder container.
 make docker-build docker-push
-# Creates image (quay.io/hyperfoil/hyperfoil-operator-bundle:0.15.0) with ClusterServiceVersion and other resources
+# Creates image (${CONTAINER_REPO_OVERRIDE}/hyperfoil-operator-bundle:0.15.0) with ClusterServiceVersion and other resources
 make bundle-build
-podman push quay.io/hyperfoil/hyperfoil-operator-bundle:0.15.0
+podman push ${CONTAINER_REPO_OVERRIDE}/hyperfoil-operator-bundle:0.15.0
 # Creates CatalogSource and Subscription in the cluster
-operator-sdk run bundle quay.io/hyperfoil/hyperfoil-operator-bundle:0.15.0
+operator-sdk run bundle ${CONTAINER_REPO_OVERRIDE}/hyperfoil-operator-bundle:0.15.0
 ```
