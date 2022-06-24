@@ -27,7 +27,7 @@ type HyperfoilSpec struct {
 	// Tag for controller image. Defaults to version matching the operator version.
 	Version string `json:"version,omitempty"`
 	// AdditionalArgs specifies additional arguments to pass to the Hyperfoil controller.
-	AdditionalArgs []string
+	AdditionalArgs []string `json:"additionalArgs,omitempty"`
 
 	// Specification of the exposed route.
 	Route RouteSpec `json:"route,omitempty"`

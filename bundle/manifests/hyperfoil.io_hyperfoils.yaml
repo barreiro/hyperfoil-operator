@@ -53,6 +53,12 @@ spec:
             description: HyperfoilSpec Configures Hyperfoil Controller and related
               resources.
             properties:
+              additionalArgs:
+                description: AdditionalArgs specifies additional arguments to pass
+                  to the Hyperfoil controller.
+                items:
+                  type: string
+                type: array
               agentDeployTimeout:
                 description: Deploy timeout for agents, in milliseconds.
                 type: integer
