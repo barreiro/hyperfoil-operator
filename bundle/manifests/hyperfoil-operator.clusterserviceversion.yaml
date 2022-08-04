@@ -21,7 +21,7 @@ metadata:
       ]
     capabilities: Basic Install
     categories: Developer Tools
-    containerImage: quay.io/hyperfoil/hyperfoil-operator:0.15.0
+    containerImage: quay.io/hyperfoil/hyperfoil-operator:0.15.1
     description: Microservice-oriented distributed benchmark framework.
     operators.operatorframework.io/builder: operator-sdk-v1.10.0+git
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
