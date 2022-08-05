@@ -98,7 +98,8 @@ spec:
                   type: string
                 type: array
               route:
-                description: Specification of the exposed route.
+                description: Specification of the exposed route. This setting is ignored
+                  when Openshift Routes are not available (on vanilla Kubernetes).
                 properties:
                   host:
                     description: 'Host for the route leading to Controller REST endpoint.
@@ -121,6 +122,12 @@ spec:
                 items:
                   type: string
                 type: array
+              serviceType:
+                description: Type of the service being exposed. By default this is
+                  ClusterIP if Openshift Route resource is available (the route will
+                  target this service). If Openshift Routes are not available (on
+                  vanilla Kubernetes) the default is NodePort.
+                type: string
               triggerUrl:
                 description: If this is set the controller does not start benchmark
                   run right away after hitting /benchmark/my-benchmark/start ; instead

@@ -11,17 +11,13 @@ metadata:
             "name": "hyperfoil"
           },
           "spec": {
-            "agentDeployTimeout": "120000",
-            "route": {
-              "host": "hyperfoil.apps.mycloud.example.com"
-            },
             "version": "latest"
           }
         }
       ]
     capabilities: Basic Install
     categories: Developer Tools
-    containerImage: quay.io/hyperfoil/hyperfoil-operator:0.15.1
+    containerImage: quay.io/hyperfoil/hyperfoil-operator:0.21.0
     description: Microservice-oriented distributed benchmark framework.
     repository: https://github.com/Hyperfoil/hyperfoil-operator
   name: hyperfoil-operator.v0.0.0
@@ -148,5 +144,5 @@ spec:
   maturity: alpha
   provider:
     name: Red Hat, Inc.
-  replaces: hyperfoil-operator.v0.15.0
+  replaces: hyperfoil-operator.v0.15.1
   version: 0.0.0

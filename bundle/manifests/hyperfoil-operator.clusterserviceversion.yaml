@@ -11,22 +11,18 @@ metadata:
             "name": "hyperfoil"
           },
           "spec": {
-            "agentDeployTimeout": 120000,
-            "route": {
-              "host": "hyperfoil.apps.mycloud.example.com"
-            },
             "version": "latest"
           }
         }
       ]
     capabilities: Basic Install
     categories: Developer Tools
-    containerImage: quay.io/hyperfoil/hyperfoil-operator:0.15.1
+    containerImage: quay.io/hyperfoil/hyperfoil-operator:0.21.0
     description: Microservice-oriented distributed benchmark framework.
     operators.operatorframework.io/builder: operator-sdk-v1.10.0+git
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
     repository: https://github.com/Hyperfoil/hyperfoil-operator
-  name: hyperfoil-operator.v0.15.1
+  name: hyperfoil-operator.v0.21.0
 spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
@@ -229,7 +225,7 @@ spec:
                 - --leader-elect
                 command:
                 - /manager
-                image: quay.io/hyperfoil/hyperfoil-operator:0.15.1
+                image: quay.io/hyperfoil/hyperfoil-operator:0.21.0
                 imagePullPolicy: Always
                 livenessProbe:
                   httpGet:
@@ -246,7 +242,7 @@ spec:
                   periodSeconds: 10
                 resources:
                   limits:
-                    cpu: 100m
+                    cpu: 500m
                     memory: 256Mi
                   requests:
                     cpu: 100m
@@ -310,5 +306,5 @@ spec:
   maturity: alpha
   provider:
     name: Red Hat, Inc.
-  replaces: hyperfoil-operator.v0.15.0
-  version: 0.15.1
+  replaces: hyperfoil-operator.v0.15.1
+  version: 0.21.0

@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha2
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -29,8 +30,11 @@ type HyperfoilSpec struct {
 	// AdditionalArgs specifies additional arguments to pass to the Hyperfoil controller.
 	AdditionalArgs []string `json:"additionalArgs,omitempty"`
 
-	// Specification of the exposed route.
+	// Specification of the exposed route. This setting is ignored when Openshift Routes are not available (on vanilla Kubernetes).
 	Route RouteSpec `json:"route,omitempty"`
+	// Type of the service being exposed. By default this is ClusterIP if Openshift Route resource is available (the route will target this service).
+	// If Openshift Routes are not available (on vanilla Kubernetes) the default is NodePort.
+	ServiceType corev1.ServiceType `json:"serviceType,omitempty"`
 	// Authentication/authorization settings.
 	Auth AuthSpec `json:"auth,omitempty"`
 	// Name of the config map and optionally its entry (separated by '/': e.g myconfigmap/log4j2-superverbose.xml) storing Log4j2 configuration file. By default the Controller uses its embedded configuration.

@@ -22,6 +22,7 @@ import (
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
+	"k8s.io/client-go/discovery"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -80,10 +81,35 @@ func main() {
 		os.Exit(1)
 	}
 
+	routesAvailable := false
+	config, err := ctrl.GetConfig()
+	if err == nil && config != nil {
+		dclient, err := discovery.NewDiscoveryClientForConfig(config)
+		if err == nil && dclient != nil {
+			apiGroupList, err := dclient.ServerGroups()
+			if err != nil {
+				setupLog.Error(err, "Error while querying ServerGroups, assuming we're on Vanilla Kubernetes")
+			} else {
+				for i := 0; i < len(apiGroupList.Groups); i++ {
+					if apiGroupList.Groups[i].Name == "route.openshift.io" {
+						routesAvailable = true
+						setupLog.Info("We found route.openshift.io, assuming we're on OpenShift.")
+						break
+					}
+				}
+			}
+		} else {
+			setupLog.Error(err, "Cannot retrieve a DiscoveryClient, assuming we're on Vanilla Kubernetes")
+		}
+	} else {
+		setupLog.Error(err, "Cannot retrieve kubeconfig")
+	}
+
 	if err = (&controllers.HyperfoilReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("Hyperfoil"),
-		Scheme: mgr.GetScheme(),
+		Client:          mgr.GetClient(),
+		Log:             ctrl.Log.WithName("controllers").WithName("Hyperfoil"),
+		Scheme:          mgr.GetScheme(),
+		RoutesAvailable: routesAvailable,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Hyperfoil")
 		os.Exit(1)

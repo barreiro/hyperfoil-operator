@@ -47,8 +47,9 @@ import (
 // HyperfoilReconciler reconciles a Hyperfoil object
 type HyperfoilReconciler struct {
 	client.Client
-	Log    logr.Logger
-	Scheme *runtime.Scheme
+	Log             logr.Logger
+	Scheme          *runtime.Scheme
+	RoutesAvailable bool
 }
 
 var routeHost = "load.me"
@@ -112,27 +113,29 @@ func (r *HyperfoilReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return reconcile.Result{}, err
 	}
 
-	controllerRoute, err := controllerRoute(r, ctx, instance, logger)
-	if err != nil {
-		return reconcile.Result{}, err
-	}
-	if err := ensureSame(r, ctx, instance, logger, controllerRoute, "Route",
-		&routev1.Route{}, compareControllerRoute, checkControllerRoute); err != nil {
-		return reconcile.Result{}, err
-	}
-	if instance.Spec.Auth.Secret != "" && instance.Spec.Route.Type == "http" {
-		updateStatus(r, ctx, instance, "Error", "Auth secret is set but the route is not encrypted.")
-		return reconcile.Result{}, errors.New("auth secret is set but the route is not encrypted")
-	} else if instance.Spec.Route.Type == "passthrough" && instance.Spec.Route.TLS == "" {
-		updateStatus(r, ctx, instance, "Error", "Passthrough route must have TLS secret defined.")
-		return reconcile.Result{}, errors.New("passthrough route must have TLS secret defined")
-	}
+	if r.RoutesAvailable {
+		controllerRoute, err := controllerRoute(r, ctx, instance, logger)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+		if err := ensureSame(r, ctx, instance, logger, controllerRoute, "Route",
+			&routev1.Route{}, compareControllerRoute, checkControllerRoute); err != nil {
+			return reconcile.Result{}, err
+		}
+		if instance.Spec.Auth.Secret != "" && instance.Spec.Route.Type == "http" {
+			updateStatus(r, ctx, instance, "Error", "Auth secret is set but the route is not encrypted.")
+			return reconcile.Result{}, errors.New("auth secret is set but the route is not encrypted")
+		} else if instance.Spec.Route.Type == "passthrough" && instance.Spec.Route.TLS == "" {
+			updateStatus(r, ctx, instance, "Error", "Passthrough route must have TLS secret defined.")
+			return reconcile.Result{}, errors.New("passthrough route must have TLS secret defined")
+		}
 
-	// This is a hack to workaround not being able to guess the route name ahead
-	actualRoute := routev1.Route{}
-	err = r.Get(ctx, types.NamespacedName{Name: instance.Name, Namespace: instance.Namespace}, &actualRoute)
-	if err == nil {
-		routeHost = actualRoute.Spec.Host
+		// This is a hack to workaround not being able to guess the route name ahead
+		actualRoute := routev1.Route{}
+		err = r.Get(ctx, types.NamespacedName{Name: instance.Name, Namespace: instance.Namespace}, &actualRoute)
+		if err == nil {
+			routeHost = actualRoute.Spec.Host
+		}
 	}
 
 	pvc := corev1.PersistentVolumeClaim{}
@@ -167,9 +170,9 @@ func (r *HyperfoilReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return reconcile.Result{}, err
 	}
 
-	controllerService := controllerService(instance)
+	controllerService := controllerService(instance, r.RoutesAvailable)
 	if err := ensureSame(r, ctx, instance, logger, controllerService, "Service",
-		&corev1.Service{}, nocompare, nocheck); err != nil {
+		&corev1.Service{}, compareControllerService, nocheck); err != nil {
 		return reconcile.Result{}, err
 	}
 
@@ -212,7 +215,7 @@ func ensureSame(r *HyperfoilReconciler, ctx context.Context, instance *hyperfoil
 		return err
 	}
 
-	// Check if this Pod already exists
+	// Check if this resource already exists
 	err := r.Get(ctx, types.NamespacedName{Name: object.GetName(), Namespace: object.GetNamespace()}, out)
 	if err != nil && k8sErrors.IsNotFound(err) {
 		logger.Info("Creating a new "+resourceType, resourceType+".Namespace", object.GetNamespace(), resourceType+".Name", object.GetName())
@@ -312,7 +315,7 @@ func controllerPod(cr *hyperfoilv1alpha2.Hyperfoil) *corev1.Pod {
 	}
 	image := "quay.io/hyperfoil/hyperfoil:" + version
 	if cr.Spec.Image != "" {
-		image := cr.Spec.Image
+		image = cr.Spec.Image
 		imagePullPolicy = corev1.PullAlways
 		if cr.Spec.Version != "" {
 			if strings.Contains(image, ":") {
@@ -577,7 +580,15 @@ func checkControllerPod(i interface{}) (bool, string, string) {
 	return false, "Pending", " is not ready"
 }
 
-func controllerService(cr *hyperfoilv1alpha2.Hyperfoil) *corev1.Service {
+func controllerService(cr *hyperfoilv1alpha2.Hyperfoil, defaultClusterIP bool) *corev1.Service {
+	var serviceType = cr.Spec.ServiceType
+	if serviceType == "" {
+		if defaultClusterIP {
+			serviceType = corev1.ServiceTypeClusterIP
+		} else {
+			serviceType = corev1.ServiceTypeNodePort
+		}
+	}
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cr.Name,
@@ -587,7 +598,7 @@ func controllerService(cr *hyperfoilv1alpha2.Hyperfoil) *corev1.Service {
 			},
 		},
 		Spec: corev1.ServiceSpec{
-			Type: corev1.ServiceTypeClusterIP,
+			Type: serviceType,
 			Selector: map[string]string{
 				"app":  cr.Name,
 				"role": "controller",
@@ -603,6 +614,25 @@ func controllerService(cr *hyperfoilv1alpha2.Hyperfoil) *corev1.Service {
 			},
 		},
 	}
+}
+
+func compareControllerService(i1 interface{}, i2 interface{}, logger logr.Logger) bool {
+	s1, ok1 := i1.(*corev1.Service)
+	s2, ok2 := i2.(*corev1.Service)
+	if !ok1 || !ok2 {
+		logger.Info("Cannot cast to Services: " + fmt.Sprintf("%v | %v", i1, i2))
+		return false
+	}
+
+	// DeepDerivative doesn't work here because the NodePort is 0 by default (and set in retrieved object)
+	// Therefore we check just the correct type...
+	if s1.Spec.Type == s2.Spec.Type {
+		return true
+	}
+
+	diff := cmp.Diff(s1.Spec, s2.Spec)
+	logger.Info("Service " + s1.GetName() + " diff (-want,+got):\n" + diff)
+	return false
 }
 
 func controllerClusterService(cr *hyperfoilv1alpha2.Hyperfoil) *corev1.Service {
@@ -742,13 +772,15 @@ func checkControllerRoute(i interface{}) (bool, string, string) {
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *HyperfoilReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
+	controller := ctrl.NewControllerManagedBy(mgr).
 		For(&hyperfoilv1alpha2.Hyperfoil{}).
 		Owns(&corev1.Pod{}).
 		Owns(&corev1.Service{}).
 		Owns(&corev1.ServiceAccount{}).
-		Owns(&routev1.Route{}).
 		Owns(&rbacv1.Role{}).
-		Owns(&rbacv1.RoleBinding{}).
-		Complete(r)
+		Owns(&rbacv1.RoleBinding{})
+	if r.RoutesAvailable {
+		controller = controller.Owns(&routev1.Route{})
+	}
+	return controller.Complete(r)
 }
