@@ -86,13 +86,13 @@ type HyperfoilStatus struct {
 	Reason string `json:"reason,omitempty"`
 }
 
-//+kubebuilder:object:root=true
-//+kubebuilder:resource:categories=all;hyperfoil,shortName=hf
-//+kubebuilder:subresource:status
-//+kubebuilder:printcolumn:name="Version",type=string,JSONPath=`.spec.version`
-//+kubebuilder:printcolumn:name="Route",type=string,JSONPath=`.spec.route.host`
-//+kubebuilder:printcolumn:name="PVC",type=string,JSONPath=`.spec.persistentVolumeClaim`
-//+kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.status`
+// +kubebuilder:object:root=true
+// +kubebuilder:resource:categories=all;hyperfoil,shortName=hf
+// +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Version",type=string,JSONPath=`.spec.version`
+// +kubebuilder:printcolumn:name="Route",type=string,JSONPath=`.spec.route.host`
+// +kubebuilder:printcolumn:name="PVC",type=string,JSONPath=`.spec.persistentVolumeClaim`
+// +kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.status`
 // Hyperfoil is the Schema for the hyperfoils API
 type Hyperfoil struct {
 	metav1.TypeMeta   `json:",inline"`

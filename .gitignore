@@ -2,6 +2,7 @@
 build/_output
 build/_test
 # Created by https://www.gitignore.io/api/go,vim,emacs,visualstudiocode
+.idea/*
 ### Emacs ###
 # -*- mode: gitignore; -*-
 *~
@@ -77,5 +78,8 @@ tags
 # End of https://www.gitignore.io/api/go,vim,emacs,visualstudiocode
 bin/*
 testbin/*
-
+# generated files
+zz_generated*
+bundle/*
+bundle.Dockerfile
 vendor
