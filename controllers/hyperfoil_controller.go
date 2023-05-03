@@ -665,6 +665,9 @@ func controllerRoute(r *HyperfoilReconciler, ctx context.Context, cr *hyperfoilv
 	subdomain := ""
 	if cr.Spec.Route.Host == "" {
 		subdomain = cr.Name
+		if cr.Namespace != "" {
+			subdomain += "-" + cr.Namespace
+		}
 	}
 	tls, err := tls(r, ctx, cr, logger)
 	if err != nil {
