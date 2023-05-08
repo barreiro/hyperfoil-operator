@@ -13,4 +13,4 @@ kind: Kustomization
 images:
 - name: controller
   newName: quay.io/hyperfoil/hyperfoil-operator
-  newTag: 0.21.0
+  newTag: 0.24.2

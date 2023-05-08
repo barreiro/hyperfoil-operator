@@ -17,7 +17,7 @@ metadata:
       ]
     capabilities: Basic Install
     categories: Developer Tools
-    containerImage: quay.io/hyperfoil/hyperfoil-operator:0.21.0
+    containerImage: quay.io/hyperfoil/hyperfoil-operator:0.24.2
     description: Microservice-oriented distributed benchmark framework.
     repository: https://github.com/Hyperfoil/hyperfoil-operator
   name: hyperfoil-operator.v0.0.0
@@ -144,5 +144,5 @@ spec:
   maturity: alpha
   provider:
     name: Red Hat, Inc.
-  replaces: hyperfoil-operator.v0.15.1
+  replaces: hyperfoil-operator.v0.21.0
   version: 0.0.0
