@@ -215,6 +215,8 @@ bundle: manifests kustomize
 	operator-sdk generate kustomize manifests -q
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
 	$(KUSTOMIZE) build config/manifests | operator-sdk generate bundle -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)
+	# lbarreiro: need to change package name due to the way the operator was first uploaded to operatorhub.io
+	sed 's/operators.operatorframework.io.bundle.package.v1\(.*\)hyperfoil-operator/operators.operatorframework.io.bundle.package.v1\1hyperfoil-bundle/' -i bundle.Dockerfile bundle/metadata/annotations.yaml
 	operator-sdk bundle validate ./bundle
 
 .PHONY: bundle-build ## Build the bundle image.
