@@ -122,7 +122,7 @@ docker-build: test ## Build docker image with the manager.
 	docker build -t ${IMG} .
 
 .PHONY: docker-build-without-test
-docker-build-without-test: ## Build docker image with the manager.
+docker-build-without-test: manifests generate fmt vet ## Build docker image with the manager.
 	docker build -t ${IMG} .
 
 .PHONY: docker-push
