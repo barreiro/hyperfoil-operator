@@ -33,7 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	hyperfoiliov1alpha2 "github.com/Hyperfoil/hyperfoil-operator/api/v1alpha2"
-	"github.com/Hyperfoil/hyperfoil-operator/controllers"
+	"github.com/Hyperfoil/hyperfoil-operator/internal/controller"
 	routev1 "github.com/openshift/api/route/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	//+kubebuilder:scaffold:imports
